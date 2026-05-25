@@ -143,6 +143,29 @@ def load_workflow(path: str | Path) -> Workflow:
         raise WorkflowLoadError(p, f"schema validation failed: {exc}", cause=exc) from exc
 
 
+def load_workflow_from_source(yaml_source: str, *, name_hint: str = "<memory>") -> Workflow:
+    """Parse + validate a workflow from in-memory YAML text.
+
+    Used by the API/worker when reconstructing a workflow from its
+    stored `yaml_source` column without writing to disk.
+    """
+    p = Path(name_hint)
+    try:
+        raw = yaml.safe_load(yaml_source)
+    except yaml.YAMLError as exc:
+        raise WorkflowLoadError(p, f"YAML parse error: {exc}", cause=exc) from exc
+    if raw is None:
+        raise WorkflowLoadError(p, "source is empty")
+    if not isinstance(raw, dict):
+        raise WorkflowLoadError(
+            p, f"top-level YAML must be a mapping (got {type(raw).__name__})"
+        )
+    try:
+        return Workflow.model_validate(raw)
+    except Exception as exc:
+        raise WorkflowLoadError(p, f"schema validation failed: {exc}", cause=exc) from exc
+
+
 def load_workflows_dir(path: str | Path) -> dict[str, Workflow]:
     """Load every `*.yaml` / `*.yml` file under `path` (non-recursive).
 

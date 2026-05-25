@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help setup test backend-test web-test dev backend-dev web-dev ci ruff clean
+.PHONY: help setup test backend-test web-test dev backend-dev web-dev api ci ruff clean
 
 help:
 	@echo "HollerBox dev commands:"
@@ -11,6 +11,7 @@ help:
 	@echo "  make web-test      Run only web tests (vitest)"
 	@echo "  make ruff          Lint backend with ruff (auto-fixable only)"
 	@echo "  make ci            Run everything CI runs (ruff + tests + builds)"
+	@echo "  make api           Start the HTTP API on http://127.0.0.1:8787"
 	@echo "  make dev           Start the web dev server (http://127.0.0.1:5173)"
 	@echo "  make clean         Remove caches, .venv, node_modules, build artifacts"
 	@echo ""
@@ -29,6 +30,9 @@ test: backend-test web-test
 
 ruff:
 	@cd backend && uv run ruff check . --fix
+
+api:
+	@cd backend && uv run hollerbox-api
 
 dev:
 	@cd web && npm run dev

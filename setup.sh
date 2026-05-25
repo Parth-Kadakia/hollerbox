@@ -173,6 +173,11 @@ cat <<EOF
     uv run hollerbox run ../workflows/examples/file_pipeline.yaml
     uv run hollerbox approve <8-char-prefix>
 
+  ${BOLD}Start the HTTP API${RESET} (Phase 3 — same engine, over REST + SSE)
+    make api                                  # http://127.0.0.1:8787
+    curl http://127.0.0.1:8787/health
+    open http://127.0.0.1:8787/docs           # interactive OpenAPI
+
 EOF
 
 if [[ "$NODE_OK" -eq 1 ]]; then

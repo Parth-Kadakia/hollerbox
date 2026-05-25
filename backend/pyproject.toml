@@ -49,6 +49,7 @@ dev = [
 
 [project.scripts]
 hollerbox = "hollerbox.cli:main"
+hollerbox-api = "api.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -68,3 +69,7 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "SIM"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI's `Depends(...)` in default args is the canonical injection pattern.
+"api/routes/*.py" = ["B008"]

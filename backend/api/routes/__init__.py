@@ -1,1 +1,1 @@
-"""HTTP route modules. (Phase 3)"""
+"""HTTP route modules — each owns one logical resource."""

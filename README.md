@@ -13,7 +13,7 @@
   <a href="https://github.com/Parth-Kadakia/hollerbox/actions"><img src="https://github.com/Parth-Kadakia/hollerbox/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/status-phase%202%20complete-green.svg" alt="Status">
+  <img src="https://img.shields.io/badge/status-phase%203%20complete-green.svg" alt="Status">
 </p>
 
 ---
@@ -35,6 +35,7 @@
 - [Architecture](#architecture)
 - [Install](#install)
 - [CLI reference](#cli-reference)
+- [HTTP API](#http-api)
 - [LLM providers + secrets](#llm-providers--secrets)
 - [Design principles](#design-principles)
 - [Non-goals](#non-goals)
@@ -78,8 +79,8 @@ logic. HollerBox is the opposite:
 | ✅ | Image providers: OpenAI (`gpt-image-1`) + Gemini (`gemini-3.1-flash-image-preview`, aka "Nano Banana"). Same auto-registration story |
 | ✅ | One-shot bootstrap: `./setup.sh` (installs `uv` if missing, syncs deps, runs tests, builds web) + `Makefile` for day-2 shortcuts |
 | ✅ | CLI: `validate`, `run`, `runs`, `run-detail`, `approve`, `reject`, `secret` group, `providers list` |
-| ✅ | 224 tests, all green, all offline. CI on every push (pytest + ruff for backend, Vite build + Vitest for web) |
-| ⏳ | HTTP API + SSE wrapping the engine (Phase 3) |
+| ✅ | **HTTP API + background worker + SSE** (Phase 3) — FastAPI server wraps the engine: workflows CRUD, run enqueue, approve / reject / cancel, run list & detail, write-only secrets, settings, providers, live SSE event stream. OpenAPI docs at `/docs`. |
+| ✅ | 265 tests, all green, all offline. CI on every push (pytest + ruff for backend, Vite build + Vitest for web) |
 | ⏳ | Web UI, chat interface, scheduling, agent step, PWA (Phases 4–8) |
 
 ## Try it in 60 seconds
@@ -329,6 +330,63 @@ Environment overrides:
 - `HOLLERBOX_DB_URL` — SQLite URL (default `sqlite:///~/.hollerbox/hollerbox.sqlite`)
 - `HOLLERBOX_KEY_PATH` — Fernet key file (default `~/.hollerbox/key`)
 
+## HTTP API
+
+The API wraps the same engine the CLI uses — workflows, runs, and secrets
+are shared. Start it with:
+
+```bash
+make api                                    # http://127.0.0.1:8787
+# or:  cd backend && uv run hollerbox-api
+```
+
+Interactive OpenAPI docs at [http://127.0.0.1:8787/docs](http://127.0.0.1:8787/docs).
+
+| Method & Path | Purpose |
+|---|---|
+| `GET /health` | Liveness + version |
+| `GET /workflows` | List registered workflows (summary) |
+| `GET /workflows/{name}` | Workflow detail incl. raw YAML |
+| `PUT /workflows/{name}` | Upsert from raw YAML (`{"yaml_source": "..."}`) |
+| `POST /workflows/validate` | Lint YAML without saving — for editor live-checks |
+| `DELETE /workflows/{name}` | Delete (409 if any run history exists) |
+| `POST /workflows/{name}/run` | Enqueue a run (`202 Accepted`); worker dispatches |
+| `GET /runs` | List runs, `?workflow=NAME&limit=N` |
+| `GET /runs/{id}` | Run detail with per-step trace |
+| `GET /runs/{id}/events` | **SSE** stream — `status`, `step`, `done` events |
+| `POST /runs/{id}/approve` | Resume a paused run |
+| `POST /runs/{id}/reject` | Cancel a paused run |
+| `POST /runs/{id}/cancel` | Cancel queued / paused / running |
+| `GET /providers` | Active text + image providers + status |
+| `GET /secrets` | List names only — values are **never** returned |
+| `PUT /secrets/{name}` | Write/rotate a secret value |
+| `DELETE /secrets/{name}` | Remove a stored secret |
+| `GET /settings` | Read all `${settings.*}` values |
+| `PUT /settings/{key}` | Upsert a setting (JSON-typed) |
+
+Environment overrides for the API:
+- `HOLLERBOX_API_HOST` / `HOLLERBOX_API_PORT` — listen address (default `127.0.0.1:8787`)
+- `HOLLERBOX_WORKER_ENABLED=0` — disable the background worker (tests use this)
+
+Quick try-it from the shell once the server is up:
+
+```bash
+# Register a workflow over HTTP
+curl -X PUT http://127.0.0.1:8787/workflows/hello \
+  -H 'Content-Type: application/json' \
+  -d "$(jq -Rs '{yaml_source: .}' < workflows/hello.yaml)"
+
+# Kick off a run
+curl -X POST http://127.0.0.1:8787/workflows/hello/run -H 'Content-Type: application/json' -d '{}'
+
+# Watch it live (SSE — Ctrl-C to detach)
+curl -N http://127.0.0.1:8787/runs/<run-id>/events
+```
+
+The engine package never imports `fastapi` — the API is purely a wrapper,
+enforced by `tests/test_engine_imports_clean.py`. Replace the HTTP layer
+with anything (gRPC, MCP server, a CLI daemon) and the engine doesn't move.
+
 ## LLM providers + secrets
 
 HollerBox auto-registers providers based on what's installed and what's in
@@ -437,7 +495,7 @@ tested. Status as of the latest commit:
 | 1 | Core engine: YAML workflows, 5 step types, dry-run + approvals + retry, SQLite persistence, CLI | ✅ |
 | 2 | LLM providers (Anthropic / OpenAI / Ollama) + `llm` step + encrypted secret store + `secret` / `providers` CLI | ✅ |
 | 2c | Image step + OpenAI (`gpt-image-1`) and Gemini (`gemini-3.1-flash-image-preview`) image providers — bonus extension to Phase 2 | ✅ |
-| 3 | HTTP API + SSE for live run traces | ⏳ |
+| 3 | HTTP API + background worker + SSE — workflows CRUD, run enqueue, approve/reject/cancel, providers/secrets/settings, live event stream | ✅ |
 | 4 | Web UI: dashboard, YAML editor, run trace, approvals | — |
 | 5 | Conversational chat interface (the primary UX) | — |
 | 6 | Scheduling (cron + interval) | — |
@@ -458,8 +516,12 @@ hollerbox/
 │   │   ├── secrets.py      ← Fernet-encrypted secret store
 │   │   ├── registry.py     ← step-type registry
 │   │   └── cli.py          ← `hollerbox …` CLI entry point
-│   ├── api/                ← FastAPI app (Phase 3)
-│   ├── tests/              ← pytest suite (198 tests, all offline)
+│   ├── api/                ← FastAPI app + background worker (Phase 3)
+│   │   ├── main.py         ← app factory + lifespan
+│   │   ├── deps.py         ← EngineSurface dependency
+│   │   ├── routes/         ← workflows, runs, approvals, providers, secrets, settings
+│   │   └── worker.py       ← polls `queued` runs, drives via Runner
+│   ├── tests/              ← pytest suite (265 tests, all offline)
 │   └── pyproject.toml
 ├── web/                    ← Vite + React + TS + Tailwind v4 + PWA
 ├── workflows/              ← YOUR workflow YAML files

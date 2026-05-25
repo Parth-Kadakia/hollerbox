@@ -110,7 +110,138 @@ class Runner:
         settings: dict[str, Any] | None = None,
         secrets: dict[str, Any] | None = None,
     ) -> RunnerResult:
-        """Start a fresh run."""
+        """Start a fresh run (synchronous create + drive).
+
+        Used by the CLI. The API path uses `enqueue()` + worker-driven
+        `drive_queued()` so HTTP requests return immediately.
+        """
+        ctx, persistent_run_id, effective_inputs = self._create_run(
+            workflow=workflow,
+            inputs=inputs,
+            yaml_source=yaml_source,
+            dry_run=dry_run,
+            run_id=run_id,
+            trigger_kind=trigger_kind,
+            settings=settings,
+            secrets=secrets,
+        )
+        return self._drive(
+            workflow=workflow,
+            ctx=ctx,
+            run_id=persistent_run_id,
+            dry_run=dry_run,
+            chat_triggered=chat_triggered,
+            start_index=0,
+            skip_approval_for=None,
+        )
+
+    def enqueue(
+        self,
+        workflow: Workflow,
+        *,
+        inputs: dict[str, Any] | None = None,
+        yaml_source: str = "",
+        dry_run: bool = False,
+        run_id: str | None = None,
+        trigger_kind: str = "manual",
+    ) -> RunnerResult:
+        """Persist a queued run and return its id without driving it.
+
+        The API's background worker (or a test) picks it up later via
+        `drive_queued()`. We deliberately do not snapshot a `RunContext`
+        here — that's built fresh inside `drive_queued()` so the worker
+        sees current secret values (rotation between enqueue and dispatch
+        should win).
+        """
+        _ctx, persistent_run_id, _inputs = self._create_run(
+            workflow=workflow,
+            inputs=inputs,
+            yaml_source=yaml_source,
+            dry_run=dry_run,
+            run_id=run_id,
+            trigger_kind=trigger_kind,
+            settings=None,
+            secrets=None,
+        )
+        return RunnerResult(run_id=persistent_run_id, status="queued")
+
+    def drive_queued(
+        self,
+        workflow: Workflow,
+        *,
+        run_id: str,
+        settings: dict[str, Any] | None = None,
+        secrets: dict[str, Any] | None = None,
+    ) -> RunnerResult:
+        """Drive an existing `queued` run from step 0 to completion or pause.
+
+        The worker calls this after `enqueue()`. The workflow object is
+        reconstructed from the row's `yaml_source` by the caller (so the
+        Runner stays unaware of YAML).
+        """
+        with session_scope(self._sf) as session:
+            run_row = repo.get_run(session, run_id)
+            if run_row is None:
+                raise ValueError(f"run {run_id!r} not found")
+            if run_row.status != "queued":
+                raise ValueError(
+                    f"run {run_id!r} is {run_row.status!r}, not queued — cannot drive"
+                )
+            inputs = dict(run_row.inputs or {})
+            dry_run = run_row.dry_run
+            chat_triggered = run_row.trigger_kind == "chat"
+
+        ctx = RunContext.new(
+            inputs=inputs,
+            secrets=self._merge_secrets(secrets),
+            settings=settings,
+            run_id=run_id,
+            providers=self._providers,
+            image_providers=self._image_providers,
+        )
+        return self._drive(
+            workflow=workflow,
+            ctx=ctx,
+            run_id=run_id,
+            dry_run=dry_run,
+            chat_triggered=chat_triggered,
+            start_index=0,
+            skip_approval_for=None,
+        )
+
+    def cancel(self, run_id: str, *, reason: str = "cancelled") -> RunnerResult:
+        """Mark a queued or paused run cancelled.
+
+        No-op for terminal states — returns the existing status so the
+        API layer can decide whether to surface a 409.
+        """
+        with session_scope(self._sf) as session:
+            run_row = repo.get_run(session, run_id)
+            if run_row is None:
+                raise ValueError(f"run {run_id!r} not found")
+            if run_row.status in ("queued", "paused", "running"):
+                repo.update_run_status(
+                    session,
+                    run_row,
+                    status="cancelled",
+                    error=reason,
+                    finished_at=_utc_now(),
+                )
+                return RunnerResult(run_id=run_id, status="cancelled", error=reason)
+            return RunnerResult(run_id=run_id, status=run_row.status)
+
+    def _create_run(
+        self,
+        *,
+        workflow: Workflow,
+        inputs: dict[str, Any] | None,
+        yaml_source: str,
+        dry_run: bool,
+        run_id: str | None,
+        trigger_kind: str,
+        settings: dict[str, Any] | None,
+        secrets: dict[str, Any] | None,
+    ) -> tuple[RunContext, str, dict[str, Any]]:
         effective_inputs = {**workflow.inputs, **(inputs or {})}
         ctx = RunContext.new(
             inputs=effective_inputs,
@@ -120,7 +251,6 @@ class Runner:
             providers=self._providers,
             image_providers=self._image_providers,
         )
-
         with session_scope(self._sf) as session:
             wf_row = repo.upsert_workflow(session, workflow, yaml_source=yaml_source)
             run_row = repo.create_run(
@@ -132,16 +262,7 @@ class Runner:
                 trigger_kind=trigger_kind,
             )
             persistent_run_id = run_row.id
-
-        return self._drive(
-            workflow=workflow,
-            ctx=ctx,
-            run_id=persistent_run_id,
-            dry_run=dry_run,
-            chat_triggered=chat_triggered,
-            start_index=0,
-            skip_approval_for=None,
-        )
+        return ctx, persistent_run_id, effective_inputs
 
     def resume(
         self,
