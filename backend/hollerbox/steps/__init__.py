@@ -1,1 +1,9 @@
-"""Step implementations: shell, python_step, http, files, llm, branch, agent. (Phase 1+)"""
+"""Built-in step implementations.
+
+Importing this package triggers registration of every step type below. The
+Runner picks them up via `hollerbox.registry.get_step_class()`.
+"""
+
+from hollerbox.steps import files, http, python_step, shell  # noqa: F401 — side-effect imports
+
+__all__ = ["files", "http", "python_step", "shell"]
