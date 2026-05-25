@@ -21,8 +21,8 @@
 > **HollerBox is a workflow engine you talk to.** You text it; it figures out
 > which workflow you mean, runs it, asks for confirmation before anything
 > destructive, and replies in the thread. Every run is typed, inspectable,
-> and persisted locally. Bring your own model — Anthropic, OpenAI, or local
-> Ollama.
+> and persisted locally. Bring your own model — Anthropic, OpenAI, Gemini,
+> or local Ollama. Generate images too.
 
 ---
 
@@ -436,6 +436,7 @@ tested. Status as of the latest commit:
 | 0 | Repo scaffold, package installs, web shell boots | ✅ |
 | 1 | Core engine: YAML workflows, 5 step types, dry-run + approvals + retry, SQLite persistence, CLI | ✅ |
 | 2 | LLM providers (Anthropic / OpenAI / Ollama) + `llm` step + encrypted secret store + `secret` / `providers` CLI | ✅ |
+| 2c | Image step + OpenAI (`gpt-image-1`) and Gemini (`gemini-3.1-flash-image-preview`) image providers — bonus extension to Phase 2 | ✅ |
 | 3 | HTTP API + SSE for live run traces | ⏳ |
 | 4 | Web UI: dashboard, YAML editor, run trace, approvals | — |
 | 5 | Conversational chat interface (the primary UX) | — |
