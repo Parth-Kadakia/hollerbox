@@ -2,7 +2,7 @@
 name = "hollerbox"
 version = "0.0.1"
 description = "Local-first, chat-driven AI workflow engine. Open source. Always yours."
-readme = "../README.md"
+readme = { file = "../README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
