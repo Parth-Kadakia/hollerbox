@@ -26,7 +26,10 @@ class LlmConfig(BaseModel):
     model: str | None = None
     system: str | None = None
     prompt: str = Field(..., min_length=1)
-    temperature: float = Field(default=0.0, ge=0.0, le=2.0)
+    # `temperature=None` (the default) tells the provider to omit it from
+    # the API call so the upstream model picks its own default. Some
+    # newer Claude models reject `temperature` outright, so unset > 0.0.
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     max_tokens: int = Field(default=1024, gt=0, le=200_000)
 
 

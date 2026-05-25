@@ -103,5 +103,19 @@ def test_raw_completion_payload_passed_through():
     assert result.raw == payload
 
 
+def test_temperature_omitted_when_unspecified():
+    captured = {}
+
+    def handler(request):
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"response": "ok"})
+
+    _set_transport(handler)
+    OllamaProvider().complete(prompt="x")
+    assert "temperature" not in captured["body"]["options"]
+    # max_tokens still expressed as num_predict
+    assert captured["body"]["options"]["num_predict"] == 1024
+
+
 def test_provider_name():
     assert OllamaProvider().name == "ollama"

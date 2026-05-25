@@ -52,16 +52,20 @@ class AnthropicProvider(Provider):
         prompt: str,
         system: str | None = None,
         model: str | None = None,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         max_tokens: int = 1024,
     ) -> Completion:
         effective_model = model or self._default_model
         kwargs: dict = {
             "model": effective_model,
             "max_tokens": max_tokens,
-            "temperature": temperature,
             "messages": [{"role": "user", "content": prompt}],
         }
+        # Newer Claude models (e.g. claude-opus-4-7) reject temperature
+        # outright with "temperature is deprecated for this model". Only
+        # include it when the caller explicitly asked for one.
+        if temperature is not None:
+            kwargs["temperature"] = temperature
         if system:
             kwargs["system"] = system
         response = self._client.messages.create(**kwargs)

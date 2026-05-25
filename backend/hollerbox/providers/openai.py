@@ -41,7 +41,7 @@ class OpenAIProvider(Provider):
         prompt: str,
         system: str | None = None,
         model: str | None = None,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         max_tokens: int = 1024,
     ) -> Completion:
         effective_model = model or self._default_model
@@ -49,11 +49,13 @@ class OpenAIProvider(Provider):
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
-        response = self._client.chat.completions.create(
-            model=effective_model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+        kwargs: dict = {
+            "model": effective_model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+        response = self._client.chat.completions.create(**kwargs)
         text = response.choices[0].message.content or ""
         return Completion(text=text, model=effective_model)

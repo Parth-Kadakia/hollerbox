@@ -70,6 +70,12 @@ def test_no_system_message_when_unspecified():
     assert msgs == [{"role": "user", "content": "hi"}]
 
 
+def test_temperature_omitted_when_unspecified():
+    client = _FakeClient(_FakeResponse("ok"))
+    OpenAIProvider("k", client=client).complete(prompt="hi")
+    assert "temperature" not in client.chat.completions.last_kwargs
+
+
 def test_model_override():
     client = _FakeClient(_FakeResponse("ok"))
     p = OpenAIProvider("k", client=client, default_model="default-m")

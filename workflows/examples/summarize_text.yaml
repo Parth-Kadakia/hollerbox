@@ -30,8 +30,10 @@ steps:
         Summarize the following text into 5 bullet points:
 
         ${inputs.text}
-      temperature: 0.2
       max_tokens: 800
+      # `temperature` deliberately not set — some Claude models reject it.
+      # Add `temperature: 0.2` here for OpenAI/Ollama if you want
+      # less-random output and your model supports it.
 
   - id: save
     type: write_file

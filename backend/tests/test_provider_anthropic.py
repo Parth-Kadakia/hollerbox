@@ -72,6 +72,22 @@ def test_no_system_key_when_unspecified():
     assert "system" not in client.messages.last_kwargs
 
 
+def test_temperature_omitted_when_unspecified():
+    """Regression: claude-opus-4-7 rejects `temperature`. Don't send it
+    unless the caller explicitly set one."""
+    client = _FakeClient(_FakeResponse(["x"]))
+    p = AnthropicProvider("test-key", client=client)
+    p.complete(prompt="hi")
+    assert "temperature" not in client.messages.last_kwargs
+
+
+def test_temperature_included_when_explicitly_set():
+    client = _FakeClient(_FakeResponse(["x"]))
+    p = AnthropicProvider("test-key", client=client)
+    p.complete(prompt="hi", temperature=0.0)
+    assert client.messages.last_kwargs["temperature"] == 0.0
+
+
 def test_multi_block_response_concatenated():
     client = _FakeClient(_FakeResponse(["one ", "two ", "three"]))
     p = AnthropicProvider("test-key", client=client)

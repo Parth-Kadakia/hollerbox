@@ -37,7 +37,13 @@ class Provider(ABC):
         prompt: str,
         system: str | None = None,
         model: str | None = None,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         max_tokens: int = 1024,
     ) -> Completion:
-        """Synchronous text completion."""
+        """Synchronous text completion.
+
+        `temperature=None` means "use the provider/model's own default" —
+        implementations must NOT pass it to the upstream API in that case.
+        Some newer Anthropic models (e.g. claude-opus-4-7) reject temperature
+        entirely, so the safe default is to omit it unless explicitly set.
+        """

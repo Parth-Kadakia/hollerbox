@@ -38,7 +38,7 @@ class MockProvider(Provider):
         prompt: str,
         system: str | None = None,
         model: str | None = None,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         max_tokens: int = 1024,
     ) -> Completion:
         self.calls.append(

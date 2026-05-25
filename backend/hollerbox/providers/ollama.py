@@ -41,18 +41,18 @@ class OllamaProvider(Provider):
         prompt: str,
         system: str | None = None,
         model: str | None = None,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         max_tokens: int = 1024,
     ) -> Completion:
         effective_model = model or self._default_model
+        options: dict = {"num_predict": max_tokens}
+        if temperature is not None:
+            options["temperature"] = temperature
         payload: dict = {
             "model": effective_model,
             "prompt": prompt,
             "stream": False,
-            "options": {
-                "temperature": temperature,
-                "num_predict": max_tokens,
-            },
+            "options": options,
         }
         if system:
             payload["system"] = system
