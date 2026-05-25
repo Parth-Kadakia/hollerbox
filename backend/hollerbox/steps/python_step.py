@@ -59,7 +59,10 @@ class PythonStep(Step):
         try:
             with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
                 exec(cfg.code, scope)  # noqa: S102 — exec is the entire point
-        except Exception as exc:
+        except (Exception, SystemExit) as exc:
+            # Catch SystemExit explicitly so user snippets that call sys.exit()
+            # or raise SystemExit fail the step instead of killing the host.
+            # We don't catch KeyboardInterrupt — that's a deliberate human signal.
             logs = _drain_logs(stdout_buf, stderr_buf)
             logs.append(traceback.format_exc().rstrip())
             return StepResult.failed(error=f"{type(exc).__name__}: {exc}", logs=logs)
