@@ -184,10 +184,16 @@ class ChatMessage(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    """POST /conversations/{id}/messages body."""
+    """POST /conversations/{id}/messages body.
+
+    `provider` / `model` override the router's default LLM picks just for
+    this turn — useful when the chat UI lets the user switch on the fly.
+    """
 
     model_config = ConfigDict(extra="forbid")
     content: str = Field(min_length=1)
+    provider: str | None = None
+    model: str | None = None
 
 
 class SendMessageResponse(BaseModel):

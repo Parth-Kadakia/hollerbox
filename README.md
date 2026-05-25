@@ -31,6 +31,7 @@
 - [Why HollerBox](#why-hollerbox)
 - [What works today](#what-works-today)
 - [Try it in 60 seconds](#try-it-in-60-seconds)
+- [Chat: how it works](#chat-how-it-works)
 - [A workflow looks like this](#a-workflow-looks-like-this)
 - [Architecture](#architecture)
 - [Install](#install)
@@ -81,71 +82,83 @@ logic. HollerBox is the opposite:
 | ✅ | CLI: `validate`, `run`, `runs`, `run-detail`, `approve`, `reject`, `secret` group, `providers list` |
 | ✅ | **HTTP API + background worker + SSE** (Phase 3) — FastAPI server wraps the engine: workflows CRUD, run enqueue, approve / reject / cancel, run list & detail, write-only secrets, settings, providers, live SSE event stream. OpenAPI docs at `/docs`. |
 | ✅ | **Web UI core** (Phase 4) — Dashboard / Workflows / Editor (Monaco + live validation) / Runs / Run detail (live SSE trace + approve / reject / cancel) / Settings (providers + secrets). React + TS + Tailwind v4 + react-router + Monaco. |
-| ✅ | **Conversational interface** (Phase 5) — chat router (LLM-driven), session manager, "reply YES to confirm" approval flow, inline approval cards. `/` is the chat page; text the engine and it picks the right workflow, asks before destructive steps, and replies with the result. |
-| ✅ | 291 backend tests + 8 web tests, all green, all offline. CI on every push (pytest + ruff for backend, Vite build + Vitest for web) |
-| ⏳ | Workflow authoring UX (templates + form builder), scheduling, agent step, PWA (Phases 6–8) |
+| ✅ | **Conversational interface** (Phase 5) — chat router (LLM-driven), session manager, "reply YES to confirm" approval flow, inline approval cards, chat history sidebar with auto-named threads + delete. Text the engine and it picks the right workflow, asks before destructive steps, and replies with the result. |
+| ✅ | **Inline file output** — when a chat or run produces a file (`image`, `write_file`, etc.) the UI fetches it through a sandboxed `/files` endpoint and renders images inline; everything else gets a 📎 download chip. Only paths a real step recorded are served (everything else is 403). |
+| ✅ | 301 backend tests + 8 web tests, all green, all offline. CI on every push (pytest + ruff for backend, Vite build + Vitest for web) |
+| ⏳ | Workflow authoring UX (templates + form builder — YAML is fine but only for devs), scheduling, agent step, PWA (Phases 6–8) |
 
 ## Try it in 60 seconds
 
-After [installing](#install):
+After [installing](#install), start the two servers and open the app:
+
+```bash
+make api          # HTTP API + background worker → http://127.0.0.1:8787
+make dev          # web app                        → http://127.0.0.1:5173
+```
+
+Then in the browser:
+
+1. **Settings** → drop in your `ANTHROPIC_API_KEY` (or `OPENAI_API_KEY`). The
+   value never leaves your machine and is stored encrypted in
+   `~/.hollerbox/`.
+2. **Chat** (the default route) → type *"run the hello workflow"*. The
+   router picks `hello`, the worker drives it, the result lands as a
+   message. If a step is destructive, you'll see an **Approve / Reject**
+   card — or just reply `YES` / `NO`.
+3. **Workflows / Editor** → YAML lives on disk, with Monaco syntax
+   highlighting and live validation. *(A form-based builder lands next so
+   you don't have to write YAML for the common case.)*
+4. **Runs** → every run, every step. Files the run produced render inline
+   (images as `<img>`, other files as a download chip).
+
+### Prefer the terminal?
+
+The CLI talks to the same engine. Nothing requires the API to be running.
 
 ```bash
 cd backend
-uv run hollerbox validate ../workflows/hello.yaml
-```
-
-```
-✓ hello  (../workflows/hello.yaml)
-```
-
-Run it:
-
-```bash
 uv run hollerbox run ../workflows/hello.yaml --input who=you
-```
-
-```
-run 5fc8dec3  status=success  last_step=stamp
-  full id: 5fc8dec344594bc8bd9430f71bd760e7
-```
-
-List recent runs:
-
-```bash
 uv run hollerbox runs
+uv run hollerbox run-detail <8-char-prefix>
 ```
 
-```
-ID         WORKFLOW           STATUS    TRIGGER   DURATION   STARTED
-5fc8dec3   hello              success   manual    8ms        2026-05-25 02:49:40
-```
-
-Now run something destructive — the `file_pipeline` example writes to disk
-and is gated by `requires_confirmation: true`:
+For a destructive step that pauses:
 
 ```bash
 uv run hollerbox run ../workflows/examples/file_pipeline.yaml
+# → status=paused. Reply with:
+uv run hollerbox approve <run-id>
 ```
 
-```
-run 68fe7b09  status=paused  last_step=save
-  full id: 68fe7b09dc8b4507a0e886c54519aedf
+## Chat: how it works
 
-→ paused at step 'save'. Approve with: hollerbox approve 68fe7b09...
-```
+The chat page is HollerBox's primary surface. Under the hood, every
+message goes through the **conversation router** (an LLM call) which
+returns exactly one of four decisions:
 
-Approve it:
+| Decision | What happens |
+|---|---|
+| `run_workflow(name, inputs)` | The matching workflow is enqueued with `trigger_kind=chat`. The worker drives it. A `pending_approval` step pauses and surfaces as an inline card — or, if you'd rather type, replying **YES** / **NO** has the same effect. |
+| `ask_clarifying(question)` | The router isn't confident — it asks you a follow-up rather than guessing. Safe-by-default beats picking the wrong workflow. |
+| `chitchat(reply)` | Greetings, thanks, out-of-scope chat. Short reply, no engine action. |
+| `agent_task(goal)` | A request no workflow covers. The agent fallback lands in Phase 7; for now you'll get a polite "nothing matches" reply restating the goal. |
 
-```bash
-uv run hollerbox approve 68fe7b09
-```
+A few details worth knowing:
 
-Then inspect the full trace, including the pre-approval `pending_approval`
-row and the post-approval `success` row for the gated step:
-
-```bash
-uv run hollerbox run-detail 68fe7b09
-```
+- **Auto-named threads.** Each thread's title is the first user message
+  (truncated). The sidebar shows your history with `New chat` for empty
+  ones; hover any row → small `×` to delete (the runs that thread
+  triggered stay in `/runs` either way).
+- **The router never fabricates workflow names.** If the LLM picks a name
+  not in your catalog, the response is rejected and the user sees a
+  clarifying reply instead.
+- **Workflow catalog is read from your `workflows/` directory + DB.** The
+  `description:` and `chat_examples:` fields are what the router reads
+  to decide. Better hints → better routing.
+- **Mid-approval, the router is bypassed.** If a thread has a paused run,
+  your next message is interpreted as `yes` / `no` / "please clarify"
+  rather than as a new request. Click the approval card or type the word
+  — same effect.
 
 ## A workflow looks like this
 

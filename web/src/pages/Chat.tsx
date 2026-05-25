@@ -6,13 +6,21 @@ import {
   deleteConversation,
   listConversations,
   listMessages,
+  listProviders,
   rejectRun,
   sendMessage,
   streamConversationEvents,
 } from "../api/client";
-import type { ChatMessage, ConversationSummary } from "../api/types";
+import type {
+  ChatMessage,
+  ConversationSummary,
+  ProviderStatus,
+} from "../api/types";
 import Attachment from "../components/Attachment";
 import { ErrorBox } from "./Dashboard";
+
+const PROVIDER_PREF_KEY = "hollerbox.chat.provider";
+const MODEL_PREF_KEY = "hollerbox.chat.model";
 
 export default function ChatPage() {
   const navigate = useNavigate();
@@ -23,7 +31,29 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [providers, setProviders] = useState<ProviderStatus[]>([]);
+  const [provider, setProvider] = useState<string>(
+    () => localStorage.getItem(PROVIDER_PREF_KEY) ?? "",
+  );
+  const [model, setModel] = useState<string>(
+    () => localStorage.getItem(MODEL_PREF_KEY) ?? "",
+  );
   const threadRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    listProviders()
+      .then((p) => setProviders(p.text.filter((x) => x.status === "ready")))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (provider) localStorage.setItem(PROVIDER_PREF_KEY, provider);
+    else localStorage.removeItem(PROVIDER_PREF_KEY);
+  }, [provider]);
+  useEffect(() => {
+    if (model) localStorage.setItem(MODEL_PREF_KEY, model);
+    else localStorage.removeItem(MODEL_PREF_KEY);
+  }, [model]);
 
   // Load history list on mount and after every change.
   async function refreshList() {
@@ -133,7 +163,10 @@ export default function ChatPage() {
     const text = input;
     setInput("");
     try {
-      const resp = await sendMessage(convId, text);
+      const resp = await sendMessage(convId, text, {
+        provider: provider || undefined,
+        model: model || undefined,
+      });
       setMessages(resp.messages);
       openStream(convId);
       void refreshList();
@@ -219,11 +252,22 @@ export default function ChatPage() {
 
       <div className="flex flex-col py-8 pr-8 min-w-0">
         <header className="pb-3 border-b border-ink/10">
-          <h1 className="text-xl font-semibold tracking-tight">Chat</h1>
-          <p className="text-xs text-ink/50 mt-1">
-            Text the engine. It picks a workflow, runs it, and asks before
-            anything destructive.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight">Chat</h1>
+              <p className="text-xs text-ink/50 mt-1">
+                Text the engine. It picks a workflow, runs it, and asks before
+                anything destructive.
+              </p>
+            </div>
+            <ModelPicker
+              providers={providers}
+              provider={provider}
+              setProvider={setProvider}
+              model={model}
+              setModel={setModel}
+            />
+          </div>
         </header>
 
         {error && <ErrorBox error={error} />}
@@ -273,6 +317,45 @@ export default function ChatPage() {
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+function ModelPicker({
+  providers,
+  provider,
+  setProvider,
+  model,
+  setModel,
+}: {
+  providers: ProviderStatus[];
+  provider: string;
+  setProvider: (p: string) => void;
+  model: string;
+  setModel: (m: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 text-xs">
+      <select
+        value={provider}
+        onChange={(e) => setProvider(e.target.value)}
+        title="Provider for the chat router"
+        className="rounded-md border border-ink/15 bg-white/50 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-terracotta/40"
+      >
+        <option value="">auto</option>
+        {providers.map((p) => (
+          <option key={p.name} value={p.name}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      <input
+        value={model}
+        onChange={(e) => setModel(e.target.value)}
+        placeholder="default model"
+        title="Optional model id; leave blank for the provider's default"
+        className="w-32 rounded-md border border-ink/15 bg-white/50 px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-2 focus:ring-terracotta/40"
+      />
     </div>
   );
 }

@@ -189,6 +189,47 @@ def test_send_message_409_when_no_provider(api_client, api_surface) -> None:
     assert "provider" in resp.json()["detail"].lower()
 
 
+def test_provider_override_routes_through_chosen_provider(api_client, api_surface) -> None:
+    """Two registered providers with different responses → the body's
+    `provider` field decides which one the router calls."""
+    from hollerbox.core.runner import Runner
+    from hollerbox.providers import MockProvider
+
+    a = MockProvider(default_text=json.dumps({"action": "chitchat", "text": "from A"}))
+    b = MockProvider(default_text=json.dumps({"action": "chitchat", "text": "from B"}))
+    api_surface.providers = {"mock": a, "alt": b}
+    api_surface.runner = Runner(
+        api_surface.session_factory,
+        secret_store=api_surface.secret_store,
+        providers=api_surface.providers,
+    )
+
+    cid = _create_conv(api_client)
+    resp = api_client.post(
+        f"/conversations/{cid}/messages",
+        json={"content": "hi", "provider": "alt"},
+    )
+    msgs = resp.json()["messages"]
+    assert msgs[-1]["content"] == "from B"
+    # The non-selected provider should NOT have been called.
+    assert a.calls == []
+    assert len(b.calls) == 1
+
+
+def test_model_override_is_passed_to_provider(api_client, api_surface) -> None:
+    from hollerbox.providers import MockProvider
+
+    p = MockProvider(default_text=json.dumps({"action": "chitchat", "text": "ok"}))
+    api_surface.providers["mock"] = p
+
+    cid = _create_conv(api_client)
+    api_client.post(
+        f"/conversations/{cid}/messages",
+        json={"content": "hi", "model": "my-special-model"},
+    )
+    assert p.calls[-1]["model"] == "my-special-model"
+
+
 # --------------------------- attachments ---------------------------
 
 def test_result_message_carries_file_attachments(api_client, api_surface, tmp_path) -> None:

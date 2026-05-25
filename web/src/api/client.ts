@@ -181,10 +181,18 @@ export function listMessages(convId: string) {
   return request<ChatMessage[]>(`/conversations/${convId}/messages`);
 }
 
-export function sendMessage(convId: string, content: string) {
+export function sendMessage(
+  convId: string,
+  content: string,
+  opts?: { provider?: string; model?: string },
+) {
   return request<SendMessageResponse>(`/conversations/${convId}/messages`, {
     method: "POST",
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({
+      content,
+      ...(opts?.provider ? { provider: opts.provider } : {}),
+      ...(opts?.model ? { model: opts.model } : {}),
+    }),
   });
 }
 

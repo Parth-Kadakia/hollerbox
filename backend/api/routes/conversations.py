@@ -36,23 +36,43 @@ _ROUTER_PROVIDER_PREFERENCE = ["anthropic", "openai", "ollama", "mock"]
 _SSE_POLL_SECONDS = 0.25
 
 
-def _select_router_provider(surface: EngineSurface) -> Provider | None:
+def _select_router_provider(
+    surface: EngineSurface, preferred: str | None = None
+) -> tuple[str, Provider] | None:
+    """Pick the provider for the router.
+
+    If the caller named one and we have it registered, use it. Otherwise
+    fall back to the auto-preference order.
+    """
+    if preferred:
+        p = surface.providers.get(preferred)
+        if p is not None:
+            return preferred, p
+        # caller asked for a specific provider that isn't loaded — fall through
+        # and let the default path handle "no provider configured" if nothing
+        # works.
     for name in _ROUTER_PROVIDER_PREFERENCE:
         p = surface.providers.get(name)
         if p is not None:
-            return p
+            return name, p
     return None
 
 
-def _build_session(surface: EngineSurface) -> ConversationSession:
-    provider = _select_router_provider(surface)
-    if provider is None:
+def _build_session(
+    surface: EngineSurface,
+    *,
+    provider_name: str | None = None,
+    model: str | None = None,
+) -> ConversationSession:
+    sel = _select_router_provider(surface, preferred=provider_name)
+    if sel is None:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "No text provider configured — set ANTHROPIC_API_KEY or OPENAI_API_KEY "
             "to use chat, or start Ollama locally.",
         )
-    router_obj = Router(provider)
+    _name, provider = sel
+    router_obj = Router(provider, model=model)
     return ConversationSession(
         surface.session_factory, runner=surface.runner, router=router_obj
     )
@@ -195,7 +215,7 @@ def send_message(
     body: SendMessageRequest,
     surface: EngineSurface = Depends(get_surface),
 ) -> SendMessageResponse:
-    session = _build_session(surface)
+    session = _build_session(surface, provider_name=body.provider, model=body.model)
     try:
         turn = session.post_user_message(conv_id, body.content)
     except ValueError as exc:
