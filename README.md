@@ -13,7 +13,7 @@
   <a href="https://github.com/Parth-Kadakia/hollerbox/actions"><img src="https://github.com/Parth-Kadakia/hollerbox/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/status-phase%203%20complete-green.svg" alt="Status">
+  <img src="https://img.shields.io/badge/status-phase%204%20complete-green.svg" alt="Status">
 </p>
 
 ---
@@ -80,8 +80,9 @@ logic. HollerBox is the opposite:
 | ✅ | One-shot bootstrap: `./setup.sh` (installs `uv` if missing, syncs deps, runs tests, builds web) + `Makefile` for day-2 shortcuts |
 | ✅ | CLI: `validate`, `run`, `runs`, `run-detail`, `approve`, `reject`, `secret` group, `providers list` |
 | ✅ | **HTTP API + background worker + SSE** (Phase 3) — FastAPI server wraps the engine: workflows CRUD, run enqueue, approve / reject / cancel, run list & detail, write-only secrets, settings, providers, live SSE event stream. OpenAPI docs at `/docs`. |
-| ✅ | 265 tests, all green, all offline. CI on every push (pytest + ruff for backend, Vite build + Vitest for web) |
-| ⏳ | Web UI, chat interface, scheduling, agent step, PWA (Phases 4–8) |
+| ✅ | **Web UI core** (Phase 4) — Dashboard / Workflows / Editor (Monaco + live validation) / Runs / Run detail (live SSE trace + approve / reject / cancel) / Settings (providers + secrets). React + TS + Tailwind v4 + react-router + Monaco. |
+| ✅ | 265 backend tests + 8 web tests, all green, all offline. CI on every push (pytest + ruff for backend, Vite build + Vitest for web) |
+| ⏳ | Chat interface, scheduling, agent step, PWA (Phases 5–8) |
 
 ## Try it in 60 seconds
 
@@ -496,7 +497,7 @@ tested. Status as of the latest commit:
 | 2 | LLM providers (Anthropic / OpenAI / Ollama) + `llm` step + encrypted secret store + `secret` / `providers` CLI | ✅ |
 | 2c | Image step + OpenAI (`gpt-image-1`) and Gemini (`gemini-3.1-flash-image-preview`) image providers — bonus extension to Phase 2 | ✅ |
 | 3 | HTTP API + background worker + SSE — workflows CRUD, run enqueue, approve/reject/cancel, providers/secrets/settings, live event stream | ✅ |
-| 4 | Web UI: dashboard, YAML editor, run trace, approvals | — |
+| 4 | Web UI: Dashboard / Workflows / Editor (Monaco + live validation) / Run detail (SSE trace + approvals) / Settings | ✅ |
 | 5 | Conversational chat interface (the primary UX) | — |
 | 6 | Scheduling (cron + interval) | — |
 | 7 | Agent step + agent fallback in chat | — |

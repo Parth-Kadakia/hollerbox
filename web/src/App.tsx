@@ -1,21 +1,29 @@
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import Layout from "./components/Layout";
+import Chat from "./pages/Chat";
+import Dashboard from "./pages/Dashboard";
+import Editor from "./pages/Editor";
+import RunDetail from "./pages/RunDetail";
+import Runs from "./pages/Runs";
+import Settings from "./pages/Settings";
+import Workflows from "./pages/Workflows";
+
 export default function App() {
   return (
-    <main className="min-h-dvh bg-bone text-ink flex flex-col items-center justify-center gap-6 px-6 text-center">
-      <img
-        src="/logo.png"
-        alt="HollerBox"
-        className="w-24 h-24 object-contain"
-      />
-      <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">HollerBox</h1>
-        <p className="text-ink/70 max-w-md">
-          Local-first, chat-driven AI workflow engine. Phase 0 shell — talk to it
-          once the chat brain is wired in Phase 5.
-        </p>
-      </div>
-      <p className="text-xs uppercase tracking-widest text-terracotta">
-        v0.0.1 · open source · runs on your machine
-      </p>
-    </main>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="workflows" element={<Workflows />} />
+          <Route path="workflows/new" element={<Editor />} />
+          <Route path="workflows/:name/edit" element={<Editor />} />
+          <Route path="runs" element={<Runs />} />
+          <Route path="runs/:runId" element={<RunDetail />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="chat" element={<Chat />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }
