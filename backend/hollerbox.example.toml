@@ -1,0 +1,27 @@
+# HollerBox example configuration.
+# Copy to ~/.hollerbox/config.toml or pass via HOLLERBOX_CONFIG=<path>.
+# All values shown here are defaults — uncomment to override.
+
+[paths]
+# Where SQLite, the secret-store key, and run artifacts live.
+# data_dir = "~/.hollerbox"
+
+# Where workflow YAML files are discovered (relative to repo root or absolute).
+# workflows_dir = "./workflows"
+
+[providers]
+# Default LLM provider used when a workflow / chat-router does not specify one.
+# default = "mock"   # one of: anthropic | openai | ollama | mock
+
+[providers.ollama]
+# host = "http://localhost:11434"
+# default_model = "llama3.1"
+
+[server]
+# host = "127.0.0.1"
+# port = 8765
+
+[chat]
+# Confidence threshold for the router. Below this, it asks a clarifying question
+# rather than guessing.
+# router_min_confidence = 0.6

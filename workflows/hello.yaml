@@ -1,0 +1,14 @@
+# Phase 0 placeholder. Real loader + step types land in Phase 1.
+name: hello
+version: 1
+description: Smoke test — echoes a greeting to stdout.
+chat_examples:
+  - "say hi"
+  - "run hello"
+inputs:
+  who: "world"
+steps:
+  - id: greet
+    type: shell
+    config:
+      command: "echo 'Hello, ${inputs.who}! — HollerBox'"

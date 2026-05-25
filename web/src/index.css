@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+/* HollerBox brand palette (cf. project_brand.md memory). */
+@theme {
+  --color-bone: #faf6ee;
+  --color-terracotta: #c97a48;
+  --color-ink: #2b2826;
+
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
