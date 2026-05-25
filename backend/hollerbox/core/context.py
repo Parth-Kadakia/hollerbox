@@ -17,6 +17,7 @@ from hollerbox.core.templating import ResolverScope
 
 if TYPE_CHECKING:
     from hollerbox.providers.base import Provider
+    from hollerbox.providers.image_base import ImageProvider
 
 
 @dataclass
@@ -27,6 +28,7 @@ class RunContext:
     run: dict[str, Any] = field(default_factory=dict)
     steps: dict[str, dict[str, Any]] = field(default_factory=dict)
     providers: dict[str, Provider] = field(default_factory=dict)
+    image_providers: dict[str, ImageProvider] = field(default_factory=dict)
 
     @classmethod
     def new(
@@ -37,6 +39,7 @@ class RunContext:
         settings: dict[str, Any] | None = None,
         run_id: str | None = None,
         providers: dict[str, Provider] | None = None,
+        image_providers: dict[str, ImageProvider] | None = None,
     ) -> RunContext:
         now = datetime.now(UTC)
         run = {
@@ -50,6 +53,7 @@ class RunContext:
             settings=dict(settings or {}),
             run=run,
             providers=dict(providers or {}),
+            image_providers=dict(image_providers or {}),
         )
 
     def _scope(self) -> ResolverScope:

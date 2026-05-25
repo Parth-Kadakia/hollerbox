@@ -41,6 +41,7 @@ from hollerbox import registry
 from hollerbox.core.context import RunContext
 from hollerbox.core.workflow import StepDefinition, Workflow
 from hollerbox.providers.base import Provider
+from hollerbox.providers.image_base import ImageProvider
 from hollerbox.secrets import SecretStore
 from hollerbox.steps.base import Step, StepResult
 from hollerbox.store import repo, session_scope
@@ -73,10 +74,12 @@ class Runner:
         session_factory: sessionmaker[Session],
         *,
         providers: dict[str, Provider] | None = None,
+        image_providers: dict[str, ImageProvider] | None = None,
         secret_store: SecretStore | None = None,
     ) -> None:
         self._sf = session_factory
         self._providers = providers or {}
+        self._image_providers = image_providers or {}
         self._secret_store = secret_store
 
     def _merge_secrets(self, override: dict[str, Any] | None) -> dict[str, Any]:
@@ -115,6 +118,7 @@ class Runner:
             settings=settings,
             run_id=run_id,
             providers=self._providers,
+            image_providers=self._image_providers,
         )
 
         with session_scope(self._sf) as session:
@@ -202,6 +206,7 @@ class Runner:
             run=dict(snapshot.get("run") or {"id": run_id}),
             steps=dict(snapshot.get("steps") or {}),
             providers=dict(self._providers),
+            image_providers=dict(self._image_providers),
         )
         # Pending step has a recorded `pending_approval` entry in ctx.steps —
         # remove it so the resume cleanly re-records the real attempt.

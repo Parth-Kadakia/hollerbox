@@ -56,11 +56,17 @@ def _build_runner() -> Runner:
     sf = _build_session_factory()
     secret_store = SecretStore(sf, key_path=_resolved_key_path())
     providers = _auto_providers(secret_store)
-    return Runner(sf, secret_store=secret_store, providers=providers)
+    image_providers = _auto_image_providers(secret_store)
+    return Runner(
+        sf,
+        secret_store=secret_store,
+        providers=providers,
+        image_providers=image_providers,
+    )
 
 
 def _auto_providers(secret_store: SecretStore) -> dict:
-    """Instantiate every provider that has its prerequisites satisfied.
+    """Instantiate every text provider that has its prerequisites satisfied.
 
     - `ollama` is always registered (instantiation costs nothing; calls fail
       only if Ollama isn't running, which is the right time to surface it).
@@ -85,6 +91,24 @@ def _auto_providers(secret_store: SecretStore) -> dict:
         with contextlib.suppress(ImportError):
             out["openai"] = OpenAIProvider(secret_store.get("OPENAI_API_KEY") or "")
 
+    return out
+
+
+def _auto_image_providers(secret_store: SecretStore) -> dict:
+    """Same shape as _auto_providers, but for image generation.
+
+    - `openai` image registered iff OPENAI_API_KEY set + `openai` SDK present.
+    - `gemini` image registered iff GEMINI_API_KEY set + `google-genai` present.
+    """
+    from hollerbox.providers import GeminiImageProvider, OpenAIImageProvider
+
+    out: dict = {}
+    if secret_store.has("OPENAI_API_KEY"):
+        with contextlib.suppress(ImportError):
+            out["openai"] = OpenAIImageProvider(secret_store.get("OPENAI_API_KEY") or "")
+    if secret_store.has("GEMINI_API_KEY"):
+        with contextlib.suppress(ImportError):
+            out["gemini"] = GeminiImageProvider(secret_store.get("GEMINI_API_KEY") or "")
     return out
 
 
@@ -485,19 +509,30 @@ def providers() -> None:
 
 @providers.command("list")
 def providers_list() -> None:
-    """List active providers (with the model each will default to)."""
+    """List active providers (text + image, with the model each will default to)."""
     secret_store = _build_secret_store()
     registered = _auto_providers(secret_store)
+    image_registered = _auto_image_providers(secret_store)
 
-    rows: list[tuple[str, str, str]] = []
-    # Always-on
-    rows.append(("mock", "ready", "(deterministic test responses)"))
-    rows.append(("ollama", "ready", _ollama_summary(registered)))
+    click.echo(click.style("Text providers (`llm` step):", bold=True))
+    rows: list[tuple[str, str, str]] = [
+        ("mock", "ready", "(deterministic test responses)"),
+        ("ollama", "ready", _ollama_summary(registered)),
+        ("anthropic", *_provider_row(registered, secret_store, "anthropic", "ANTHROPIC_API_KEY")),
+        ("openai", *_provider_row(registered, secret_store, "openai", "OPENAI_API_KEY")),
+    ]
+    _echo_provider_rows(rows)
 
-    # SDK-gated
-    rows.append(("anthropic", *_provider_row(registered, secret_store, "anthropic", "ANTHROPIC_API_KEY")))
-    rows.append(("openai", *_provider_row(registered, secret_store, "openai", "OPENAI_API_KEY")))
+    click.echo()
+    click.echo(click.style("Image providers (`image` step):", bold=True))
+    image_rows: list[tuple[str, str, str]] = [
+        ("openai", *_provider_row(image_registered, secret_store, "openai", "OPENAI_API_KEY")),
+        ("gemini", *_provider_row(image_registered, secret_store, "gemini", "GEMINI_API_KEY")),
+    ]
+    _echo_provider_rows(image_rows)
 
+
+def _echo_provider_rows(rows: list[tuple[str, str, str]]) -> None:
     width = max(len(r[0]) for r in rows)
     for name, status, detail in rows:
         color = "green" if status == "ready" else ("yellow" if status == "missing-sdk" else "bright_black")

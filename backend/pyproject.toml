@@ -37,6 +37,7 @@ api = [
 llm = [
     "anthropic>=0.40",
     "openai>=1.40",
+    "google-genai>=1.0",
     "httpx>=0.27",
 ]
 dev = [

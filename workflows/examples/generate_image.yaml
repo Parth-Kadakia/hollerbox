@@ -1,0 +1,42 @@
+# Generate an image with the `image` step (OpenAI or Gemini).
+#
+# One-time setup, pick one (or both):
+#   hollerbox secret set OPENAI_API_KEY
+#   hollerbox secret set GEMINI_API_KEY
+#   uv sync --extra llm                 # installs openai + google-genai SDKs
+#
+# Run (defaults to OpenAI):
+#   hollerbox run workflows/examples/generate_image.yaml \
+#     --input prompt="A children's book drawing of a veterinarian using a stethoscope to listen to the heartbeat of a baby otter." \
+#     --input out_path=/tmp/otter.png
+#
+# Or switch providers via the `provider` input:
+#   hollerbox run workflows/examples/generate_image.yaml \
+#     --input prompt="A nano banana dish in a fancy restaurant with a Gemini theme." \
+#     --input out_path=/tmp/banana.png \
+#     --input provider=gemini
+#
+# The `render` step is destructive (it writes a PNG) — the Runner pauses
+# for approval. Run `hollerbox approve <run-id>` to continue.
+name: generate_image
+version: 1
+description: Generate one image via OpenAI or Gemini and save it to disk.
+chat_examples:
+  - "make me a picture of {prompt}"
+  - "draw {prompt}"
+inputs:
+  prompt: "A serene mountain landscape at dawn, painted in watercolor."
+  out_path: "/tmp/hollerbox-image.png"
+  provider: "openai"     # or "gemini"
+  size: "1024x1024"
+  n: 1
+steps:
+  - id: render
+    type: image
+    requires_confirmation: true   # gate the write for safety
+    config:
+      provider: "${inputs.provider}"
+      prompt: "${inputs.prompt}"
+      save_to: "${inputs.out_path}"
+      size: "${inputs.size}"
+      n: "${inputs.n}"
