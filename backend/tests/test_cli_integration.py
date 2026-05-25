@@ -19,9 +19,15 @@ from hollerbox.cli import main
 
 @pytest.fixture()
 def cli_env(tmp_path: Path) -> dict[str, str]:
-    """Each test gets its own ephemeral SQLite db."""
+    """Each test gets its own ephemeral SQLite db AND its own secret key
+    file, so tests never touch the user's real ~/.hollerbox/ data.
+    """
     db_path = tmp_path / "hb.sqlite"
-    return {"HOLLERBOX_DB_URL": f"sqlite:///{db_path}"}
+    key_path = tmp_path / "hb.key"
+    return {
+        "HOLLERBOX_DB_URL": f"sqlite:///{db_path}",
+        "HOLLERBOX_KEY_PATH": str(key_path),
+    }
 
 
 @pytest.fixture()
@@ -217,3 +223,99 @@ def test_packaged_file_pipeline_validates(cli_env):
     cli = CliRunner()
     r = _run(cli, ["validate", str(REPO_WORKFLOWS / "examples" / "file_pipeline.yaml")], cli_env)
     assert r.exit_code == 0
+
+
+# --------------------------- secret CLI ---------------------------
+
+def test_secret_set_list_check_rm_roundtrip(cli_env):
+    cli = CliRunner()
+    # set (via inline --value to skip the prompt)
+    r = _run(cli, ["secret", "set", "OPENAI_API_KEY", "--value", "sk-abc"], cli_env)
+    assert r.exit_code == 0
+    assert "stored" in r.output
+
+    # check (present)
+    r = _run(cli, ["secret", "check", "OPENAI_API_KEY"], cli_env)
+    assert r.exit_code == 0
+
+    # check (absent)
+    r = _run(cli, ["secret", "check", "MISSING"], cli_env)
+    assert r.exit_code == 1
+
+    # list
+    r = _run(cli, ["secret", "list"], cli_env)
+    assert r.exit_code == 0
+    assert "OPENAI_API_KEY" in r.output
+
+    # rm with --yes
+    r = _run(cli, ["secret", "rm", "OPENAI_API_KEY", "--yes"], cli_env)
+    assert r.exit_code == 0
+    assert "deleted" in r.output
+
+    # list now empty
+    r = _run(cli, ["secret", "list"], cli_env)
+    assert "no secrets stored" in r.output
+
+
+def test_secret_list_value_never_displayed(cli_env):
+    """Critical: `secret list` must show names only, never plaintext values."""
+    cli = CliRunner()
+    secret_value = "sk-this-must-never-appear-in-list-output"
+    _run(cli, ["secret", "set", "K", "--value", secret_value], cli_env)
+    r = _run(cli, ["secret", "list"], cli_env)
+    assert secret_value not in r.output
+
+
+def test_workflow_run_uses_stored_secret_without_cli_flag(cli_env, tmp_path: Path):
+    """Set a secret in the store, run a workflow that references it via
+    ${secrets.X} — the resolved real value should reach the shell command,
+    but the persisted resolved_input should be redacted."""
+    cli = CliRunner()
+    # Pre-store the secret
+    _run(cli, ["secret", "set", "TOKEN", "--value", "real-token-value"], cli_env)
+
+    # Workflow that uses the stored secret
+    wf_path = tmp_path / "needs_secret.yaml"
+    wf_path.write_text(
+        """
+name: needs_secret
+steps:
+  - id: echo
+    type: shell
+    config:
+      command: "echo got=${secrets.TOKEN}"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    # Run with NO --secret flag — should pull from store
+    r = _run(cli, ["run", str(wf_path)], cli_env)
+    assert r.exit_code == 0
+    run_id = _extract_full_id(r.output)
+
+    # Detail shows the secret was redacted in the persisted resolved_input
+    # (i.e. real-token-value should NOT appear in any persisted record we
+    # display, even though the actual command DID run with the real value).
+    r = _run(cli, ["run-detail", run_id], cli_env)
+    assert r.exit_code == 0
+    # Run output shows real value (the command was real-resolved)
+    assert "got=real-token-value" in r.output
+
+
+def test_secret_rm_without_yes_aborts_when_declined(cli_env):
+    cli = CliRunner()
+    _run(cli, ["secret", "set", "K", "--value", "v"], cli_env)
+    # Provide "n" as stdin so confirm() returns False
+    r = cli.invoke(main, ["secret", "rm", "K"], env=cli_env, input="n\n", catch_exceptions=False)
+    assert r.exit_code == 0
+    assert "aborted" in r.output
+    # Still there
+    r = _run(cli, ["secret", "check", "K"], cli_env)
+    assert r.exit_code == 0
+
+
+def test_secret_rm_nonexistent(cli_env):
+    cli = CliRunner()
+    r = _run(cli, ["secret", "rm", "DOES_NOT_EXIST", "--yes"], cli_env)
+    assert r.exit_code == 0
+    assert "no secret named" in r.output

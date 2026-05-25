@@ -41,6 +41,7 @@ from hollerbox import registry
 from hollerbox.core.context import RunContext
 from hollerbox.core.workflow import StepDefinition, Workflow
 from hollerbox.providers.base import Provider
+from hollerbox.secrets import SecretStore
 from hollerbox.steps.base import Step, StepResult
 from hollerbox.store import repo, session_scope
 from hollerbox.store.models import StepRunRow
@@ -72,9 +73,24 @@ class Runner:
         session_factory: sessionmaker[Session],
         *,
         providers: dict[str, Provider] | None = None,
+        secret_store: SecretStore | None = None,
     ) -> None:
         self._sf = session_factory
         self._providers = providers or {}
+        self._secret_store = secret_store
+
+    def _merge_secrets(self, override: dict[str, Any] | None) -> dict[str, Any]:
+        """Combine SecretStore values with caller-supplied overrides.
+
+        Overrides win — so a CLI `--secret K=V` can still shadow a stored
+        secret in one-off runs without modifying the DB.
+        """
+        merged: dict[str, Any] = {}
+        if self._secret_store is not None:
+            merged.update(self._secret_store.load_all())
+        if override:
+            merged.update(override)
+        return merged
 
     # --------------------------- public API ---------------------------
 
@@ -95,7 +111,7 @@ class Runner:
         effective_inputs = {**workflow.inputs, **(inputs or {})}
         ctx = RunContext.new(
             inputs=effective_inputs,
-            secrets=secrets,
+            secrets=self._merge_secrets(secrets),
             settings=settings,
             run_id=run_id,
         )
@@ -180,7 +196,7 @@ class Runner:
         # Approved → rebuild context, find resume index, drive from there.
         ctx = RunContext(
             inputs=inputs,
-            secrets=dict(secrets or {}),
+            secrets=self._merge_secrets(secrets),
             settings=dict(snapshot.get("settings") or {}),
             run=dict(snapshot.get("run") or {"id": run_id}),
             steps=dict(snapshot.get("steps") or {}),

@@ -27,6 +27,7 @@ from hollerbox.core.workflow import (
     load_workflow,
     load_workflows_dir,
 )
+from hollerbox.secrets import SecretStore, SecretStoreError
 from hollerbox.store import (
     init_db,
     make_engine,
@@ -51,9 +52,28 @@ def _resolved_db_url() -> str:
 
 
 def _build_runner() -> Runner:
+    sf = _build_session_factory()
+    secret_store = SecretStore(sf, key_path=_resolved_key_path())
+    return Runner(sf, secret_store=secret_store)
+
+
+def _build_session_factory():
     engine = make_engine(_resolved_db_url())
     init_db(engine)
-    return Runner(make_session_factory(engine))
+    return make_session_factory(engine)
+
+
+def _build_secret_store() -> SecretStore:
+    return SecretStore(_build_session_factory(), key_path=_resolved_key_path())
+
+
+def _resolved_key_path() -> Path:
+    env_key = os.environ.get("HOLLERBOX_KEY_PATH")
+    if env_key:
+        return Path(env_key).expanduser()
+    from hollerbox.secrets import DEFAULT_KEY_FILE
+
+    return DEFAULT_KEY_FILE
 
 
 def _parse_kv_pairs(pairs: tuple[str, ...]) -> dict[str, Any]:
@@ -372,10 +392,8 @@ def run_detail(run_id: str, logs: bool) -> None:
 # --------------------------- approve / reject ---------------------------
 
 def _resolve_and_load(run_id_or_prefix: str) -> tuple[Runner, str, Workflow]:
-    engine = make_engine(_resolved_db_url())
-    init_db(engine)
-    sf = make_session_factory(engine)
-    runner = Runner(sf)
+    sf = _build_session_factory()
+    runner = Runner(sf, secret_store=SecretStore(sf, key_path=_resolved_key_path()))
     with session_scope(sf) as s:
         run = repo.get_run(s, run_id_or_prefix)
         if run is None and len(run_id_or_prefix) < 32:
@@ -425,6 +443,77 @@ def reject(run_id: str) -> None:
     runner, full_id, wf = _resolve_and_load(run_id)
     result = runner.resume(wf, run_id=full_id, approved=False)
     _echo_result(result)
+
+
+# --------------------------- secret group ---------------------------
+
+@main.group()
+def secret() -> None:
+    """Manage encrypted secrets (set / list / rm / check)."""
+
+
+@secret.command("set")
+@click.argument("name")
+@click.option(
+    "--value",
+    "-v",
+    default=None,
+    help="Provide the value inline (otherwise you'll be prompted; the prompt hides input).",
+)
+def secret_set(name: str, value: str | None) -> None:
+    """Store an encrypted secret under NAME (overwrites if it exists)."""
+    if value is None:
+        value = click.prompt(
+            f"Value for {name}",
+            hide_input=True,
+            confirmation_prompt=True,
+        )
+    try:
+        _build_secret_store().set(name, value)
+    except SecretStoreError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(click.style(f"✓ stored '{name}'", fg="green"))
+
+
+@secret.command("list")
+def secret_list() -> None:
+    """List the NAMES of stored secrets (values never displayed)."""
+    try:
+        names = _build_secret_store().list_names()
+    except SecretStoreError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if not names:
+        click.echo("(no secrets stored)")
+        return
+    for n in names:
+        click.echo(n)
+
+
+@secret.command("rm")
+@click.argument("name")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+def secret_rm(name: str, yes: bool) -> None:
+    """Delete a stored secret."""
+    if not yes and not click.confirm(f"Delete secret {name!r}?"):
+        click.echo("aborted")
+        return
+    store = _build_secret_store()
+    removed = store.delete(name)
+    if removed:
+        click.echo(click.style(f"✓ deleted '{name}'", fg="green"))
+    else:
+        click.echo(click.style(f"(no secret named '{name}')", fg="yellow"))
+
+
+@secret.command("check")
+@click.argument("name")
+def secret_check(name: str) -> None:
+    """Exit 0 if NAME is set, 1 otherwise. Useful for scripts."""
+    if _build_secret_store().has(name):
+        click.echo(click.style(f"✓ '{name}' is set", fg="green"))
+    else:
+        click.echo(click.style(f"✗ '{name}' is not set", fg="red"), err=True)
+        raise click.exceptions.Exit(1)
 
 
 if __name__ == "__main__":

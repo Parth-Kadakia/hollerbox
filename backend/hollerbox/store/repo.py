@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from hollerbox.core.workflow import Workflow
 from hollerbox.store.models import (
     RunRow,
+    SecretRow,
     SettingRow,
     StepRunRow,
     WorkflowRow,
@@ -195,3 +196,41 @@ def set_setting(session: Session, key: str, value: Any) -> SettingRow:
 def get_setting(session: Session, key: str, default: Any = None) -> Any:
     row = session.get(SettingRow, key)
     return row.value if row is not None else default
+
+
+# --------------------------- secrets ---------------------------
+
+def upsert_secret(session: Session, *, name: str, ciphertext: bytes) -> SecretRow:
+    existing = session.get(SecretRow, name)
+    if existing is None:
+        row = SecretRow(name=name, value_encrypted=ciphertext)
+        session.add(row)
+        session.flush()
+        return row
+    existing.value_encrypted = ciphertext
+    existing.updated_at = _utc_now()
+    session.flush()
+    return existing
+
+
+def get_secret_ciphertext(session: Session, name: str) -> bytes | None:
+    row = session.get(SecretRow, name)
+    return row.value_encrypted if row is not None else None
+
+
+def list_secret_names(session: Session) -> list[str]:
+    return list(session.scalars(select(SecretRow.name).order_by(SecretRow.name)).all())
+
+
+def list_secrets_with_ciphertext(session: Session) -> list[tuple[str, bytes]]:
+    rows = session.scalars(select(SecretRow).order_by(SecretRow.name)).all()
+    return [(r.name, r.value_encrypted) for r in rows]
+
+
+def delete_secret(session: Session, name: str) -> bool:
+    row = session.get(SecretRow, name)
+    if row is None:
+        return False
+    session.delete(row)
+    session.flush()
+    return True
