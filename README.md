@@ -70,13 +70,15 @@ logic. HollerBox is the opposite:
 | | |
 |---|---|
 | ✅ | YAML workflow models, validation, templating with `${inputs.X}` / `${steps.X.output.Y}` / `${secrets.X}` / `${settings.X}` / `${run.id\|date\|timestamp}` |
-| ✅ | 6 step types: `shell`, `python_step`, `http`, `read_file`, `write_file`, `llm` |
+| ✅ | 7 step types: `shell`, `python_step`, `http`, `read_file`, `write_file`, `llm`, `image` |
 | ✅ | Sequential Runner with dry-run mode, approval pauses, error policy (stop / continue / retry with backoff), persisted resumability |
 | ✅ | Full SQLite persistence — workflows, runs, step_runs, settings, schedules, conversations, messages, secrets, push_subscriptions |
 | ✅ | Encrypted secret store (Fernet, key at `~/.hollerbox/key`, 0600). Secrets resolved at runtime, redacted from every persisted record |
-| ✅ | LLM providers: Anthropic, OpenAI, Ollama (lazy SDK imports + auto-registration based on stored keys), plus a deterministic `mock` |
+| ✅ | Text LLM providers: Anthropic, OpenAI, Ollama (lazy SDK imports + auto-registration based on stored keys), plus a deterministic `mock` |
+| ✅ | Image providers: OpenAI (`gpt-image-1`) + Gemini (`gemini-3.1-flash-image-preview`, aka "Nano Banana"). Same auto-registration story |
+| ✅ | One-shot bootstrap: `./setup.sh` (installs `uv` if missing, syncs deps, runs tests, builds web) + `Makefile` for day-2 shortcuts |
 | ✅ | CLI: `validate`, `run`, `runs`, `run-detail`, `approve`, `reject`, `secret` group, `providers list` |
-| ✅ | 198 tests, all green, all offline. CI on every push (pytest + ruff for backend, Vite build + Vitest for web) |
+| ✅ | 224 tests, all green, all offline. CI on every push (pytest + ruff for backend, Vite build + Vitest for web) |
 | ⏳ | HTTP API + SSE wrapping the engine (Phase 3) |
 | ⏳ | Web UI, chat interface, scheduling, agent step, PWA (Phases 4–8) |
 
@@ -201,12 +203,26 @@ Or use the `llm` step:
 - id: summarize
   type: llm
   config:
-    provider: anthropic            # or openai / ollama / mock
+    provider: anthropic
     system: "You are a concise editor. Reply with bullets only."
     prompt: |
       Summarize this into 5 bullet points:
       ${inputs.text}
     max_tokens: 800
+```
+
+Or generate an image (always destructive — pauses for approval by default):
+
+```yaml
+- id: render
+  type: image
+  requires_confirmation: true
+  config:
+    provider: openai
+    prompt: "A children's book drawing of a vet listening to a baby otter."
+    save_to: "${inputs.out_path}"
+    size: "1024x1024"
+    n: 1
 ```
 
 The `${secrets.ANTHROPIC_API_KEY}` you'd expect to see here is **invisible**
@@ -339,13 +355,21 @@ uv run hollerbox providers list
   openai     no-key  set with: hollerbox secret set OPENAI_API_KEY
 ```
 
-OpenAI works the same way (`OPENAI_API_KEY`). Ollama is always "ready" —
+OpenAI text works the same way (`OPENAI_API_KEY`). Ollama is always "ready" —
 calls fail at run time if no Ollama daemon is listening on `localhost:11434`.
 
-Defaults per provider (overrideable per `llm` step via `model: <id>`):
-- Anthropic: `claude-opus-4-7`
-- OpenAI: `gpt-4o-mini`
-- Ollama: `llama3.1`
+For the `image` step, image providers are auto-registered the same way:
+- **OpenAI** image: enabled when `OPENAI_API_KEY` is set (same key as text)
+- **Gemini** image: enabled when `GEMINI_API_KEY` is set
+
+Defaults per provider (overrideable per step via `model: <id>`):
+
+| | Text | Image |
+|---|---|---|
+| **Anthropic** | `claude-opus-4-7` | — (no image API yet) |
+| **OpenAI** | `gpt-4o-mini` | `gpt-image-1` |
+| **Gemini** | — (text TBD) | `gemini-3.1-flash-image-preview` |
+| **Ollama** | `llama3.1` | — |
 
 **Secret hygiene.** Real secret values exist in three places only: the
 encrypted SQLite row, the in-memory `secrets` dict during a run, and the
@@ -354,13 +378,22 @@ which records everything a step actually saw — replaces `${secrets.*}` with
 `••••` before persistence. There's a test that fails if any code path
 accidentally writes a plaintext secret to the database.
 
-Try it:
+Try a text summary:
 
 ```bash
-uv run hollerbox run ../workflows/examples/summarize_text.yaml --input provider=anthropic --input text="HollerBox is a local-first workflow engine. Workflows are YAML files. Steps include shell, python, http, files, and llm. Destructive steps pause for approval." --input out_path=/tmp/hb-summary.md
+uv run hollerbox run ../workflows/examples/summarize_text.yaml --input provider=anthropic --input text="HollerBox is a local-first workflow engine. Workflows are YAML files. Steps include shell, python, http, files, llm, and image. Destructive steps pause for approval." --input out_path=/tmp/hb-summary.md
 ```
 
 Approve the paused `save` step, then `cat /tmp/hb-summary.md`.
+
+Or generate an image:
+
+```bash
+uv run hollerbox run ../workflows/examples/generate_image.yaml --input prompt="A children's book drawing of a vet listening to a baby otter." --input out_path=/tmp/otter.png
+```
+
+Approve the paused `render` step, then `open /tmp/otter.png`. To use Gemini
+instead, add `--input provider=gemini`.
 
 ## Design principles
 
@@ -417,8 +450,9 @@ hollerbox/
 ├── backend/
 │   ├── hollerbox/          ← the engine (Python package, no web deps)
 │   │   ├── core/           ← Runner, RunContext, templating, workflow models
-│   │   ├── steps/          ← shell, python, http, files, llm step types
-│   │   ├── providers/      ← anthropic / openai / ollama / mock
+│   │   ├── steps/          ← shell, python, http, files, llm, image step types
+│   │   ├── providers/      ← text: anthropic / openai / ollama / mock
+│   │   │                      image: openai / gemini (separate ABC)
 │   │   ├── store/          ← SQLAlchemy models + repo functions
 │   │   ├── secrets.py      ← Fernet-encrypted secret store
 │   │   ├── registry.py     ← step-type registry
@@ -431,7 +465,8 @@ hollerbox/
 │   ├── hello.yaml
 │   └── examples/
 │       ├── file_pipeline.yaml
-│       └── summarize_text.yaml
+│       ├── summarize_text.yaml
+│       └── generate_image.yaml
 ├── assets/                 ← brand assets (logo master)
 ├── .github/workflows/ci.yml
 └── README.md               ← you are here
