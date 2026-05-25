@@ -40,7 +40,7 @@ export default function Workflows() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Workflows</h1>
           <p className="text-sm text-ink/60 mt-1">
@@ -73,8 +73,8 @@ export default function Workflows() {
       )}
 
       {workflows.data && workflows.data.length > 0 && (
-        <div className="rounded-lg border border-ink/10 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="rounded-lg border border-ink/10 overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead className="bg-ink/[0.03] text-xs uppercase tracking-wider text-ink/50">
               <tr>
                 <th className="text-left px-4 py-2 font-medium">Name</th>

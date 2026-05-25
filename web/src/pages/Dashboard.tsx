@@ -22,7 +22,7 @@ export default function Dashboard() {
         </p>
       </header>
 
-      <section className="grid grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Stat label="Workflows" value={workflows.data?.length ?? "—"} />
         <Stat label="Runs (last 10)" value={total} />
         <Stat
@@ -55,8 +55,8 @@ export default function Dashboard() {
           </p>
         )}
         {runs.data && runs.data.length > 0 && (
-          <div className="rounded-lg border border-ink/10 overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-lg border border-ink/10 overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
               <thead className="bg-ink/[0.03] text-xs uppercase tracking-wider text-ink/50">
                 <tr>
                   <th className="text-left px-4 py-2 font-medium">ID</th>

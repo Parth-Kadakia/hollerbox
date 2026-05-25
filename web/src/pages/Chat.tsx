@@ -193,9 +193,46 @@ export default function ChatPage() {
     }
   }
 
+  const [historyOpen, setHistoryOpen] = useState(false);
+  // Close mobile drawer on conv switch
+  useEffect(() => {
+    setHistoryOpen(false);
+  }, [convId]);
+
   return (
-    <div className="grid grid-cols-[220px_1fr] gap-6 h-[calc(100dvh-4rem)] -my-8">
-      <aside className="border-r border-ink/10 pr-4 py-8 overflow-y-auto">
+    <div className="md:grid md:grid-cols-[220px_1fr] md:gap-6 md:h-[calc(100dvh-4rem)] md:-my-8 -mx-4 sm:-mx-6 md:mx-0">
+      {/* Mobile history toggle */}
+      <div className="md:hidden flex items-center justify-between border-b border-ink/10 px-4 py-2">
+        <button
+          onClick={() => setHistoryOpen(true)}
+          className="flex items-center gap-1.5 text-xs text-ink/70"
+        >
+          <span aria-hidden>☰</span> History ({conversations.length})
+        </button>
+        <button
+          onClick={startNewConversation}
+          className="text-xs text-terracotta"
+        >
+          + New
+        </button>
+      </div>
+
+      {/* Mobile drawer backdrop */}
+      {historyOpen && (
+        <button
+          aria-label="Close history"
+          onClick={() => setHistoryOpen(false)}
+          className="md:hidden fixed inset-0 z-40 bg-black/30"
+        />
+      )}
+
+      <aside
+        className={[
+          "md:border-r md:border-ink/10 md:pr-4 md:py-8 md:static md:translate-x-0 md:overflow-y-auto md:w-auto",
+          "fixed md:relative inset-y-0 left-0 z-50 w-72 bg-bone px-4 py-6 overflow-y-auto transition-transform",
+          historyOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+        ].join(" ")}
+      >
         <div className="flex items-baseline justify-between mb-3">
           <h2 className="text-xs uppercase tracking-wider text-ink/50">History</h2>
           <button
@@ -250,7 +287,7 @@ export default function ChatPage() {
         </ul>
       </aside>
 
-      <div className="flex flex-col py-8 pr-8 min-w-0">
+      <div className="flex flex-col px-4 sm:px-6 md:px-0 md:pr-8 py-4 md:py-8 min-w-0 h-[calc(100dvh-8rem)] md:h-auto">
         <header className="pb-3 border-b border-ink/10">
           <div className="flex items-start justify-between gap-3">
             <div>

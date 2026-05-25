@@ -100,7 +100,7 @@ export default function EditorPage() {
       {loadError && <ErrorBox error={loadError} />}
       {saveError && <ErrorBox error={saveError} />}
 
-      <div className="grid grid-cols-[1fr_280px] gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_280px] gap-5">
         <div className="rounded-lg border border-ink/10 overflow-hidden">
           {loading ? (
             <div className="p-6 text-sm text-ink/50">loading workflow…</div>

@@ -162,7 +162,7 @@ function SecretsForm({
   }
 
   return (
-    <form onSubmit={submit} className="rounded-lg border border-ink/10 p-4 grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+    <form onSubmit={submit} className="rounded-lg border border-ink/10 p-4 grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
       <label className="text-xs uppercase tracking-wider text-ink/50 space-y-1">
         Name
         <select
