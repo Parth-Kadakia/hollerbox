@@ -19,7 +19,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from api.deps import EngineSurface, build_surface
-from api.routes import approvals, health, providers, runs, secrets, settings, workflows
+from api.routes import (
+    approvals,
+    conversations,
+    health,
+    providers,
+    runs,
+    secrets,
+    settings,
+    workflows,
+)
 from api.worker import Worker
 
 
@@ -68,6 +77,7 @@ def create_app() -> FastAPI:
     app.include_router(providers.router)
     app.include_router(secrets.router)
     app.include_router(settings.router)
+    app.include_router(conversations.router)
     return app
 
 

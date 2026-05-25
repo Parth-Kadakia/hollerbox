@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 
 from hollerbox.core.workflow import Workflow
 from hollerbox.store.models import (
+    ConversationRow,
+    MessageRow,
     RunRow,
     SecretRow,
     SettingRow,
@@ -234,3 +236,55 @@ def delete_secret(session: Session, name: str) -> bool:
     session.delete(row)
     session.flush()
     return True
+
+
+# --------------------------- conversations ---------------------------
+
+def create_conversation(session: Session, *, title: str = "") -> ConversationRow:
+    row = ConversationRow(title=title)
+    session.add(row)
+    session.flush()
+    return row
+
+
+def get_conversation(session: Session, conv_id: str) -> ConversationRow | None:
+    return session.get(ConversationRow, conv_id)
+
+
+def list_conversations(session: Session, *, limit: int = 50) -> Sequence[ConversationRow]:
+    return session.scalars(
+        select(ConversationRow).order_by(ConversationRow.updated_at.desc()).limit(limit)
+    ).all()
+
+
+def add_message(
+    session: Session,
+    *,
+    conversation_id: str,
+    role: str,
+    content: str,
+    kind: str = "text",
+    run_id: str | None = None,
+) -> MessageRow:
+    row = MessageRow(
+        conversation_id=conversation_id,
+        role=role,
+        content=content,
+        kind=kind,
+        run_id=run_id,
+    )
+    session.add(row)
+    # Touch the conversation so list ordering reflects activity.
+    conv = session.get(ConversationRow, conversation_id)
+    if conv is not None:
+        conv.updated_at = _utc_now()
+    session.flush()
+    return row
+
+
+def list_messages(session: Session, conversation_id: str) -> Sequence[MessageRow]:
+    return session.scalars(
+        select(MessageRow)
+        .where(MessageRow.conversation_id == conversation_id)
+        .order_by(MessageRow.created_at)
+    ).all()

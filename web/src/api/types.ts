@@ -89,3 +89,30 @@ export interface ProvidersResponse {
   text: ProviderStatus[];
   image: ProviderStatus[];
 }
+
+// --------------------------- conversations ---------------------------
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MessageKind = "text" | "ack" | "approval_request" | "result" | "error";
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  kind: MessageKind;
+  run_id: string | null;
+  created_at: string;
+}
+
+export interface SendMessageResponse {
+  user_message_id: string;
+  assistant_message_ids: string[];
+  messages: ChatMessage[];
+}

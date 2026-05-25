@@ -128,3 +128,46 @@ class SecretWriteRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     value: str = Field(min_length=1)
+
+
+# --------------------------- conversations / messages ---------------------------
+
+class ConversationSummary(BaseModel):
+    """List-view shape for a conversation."""
+
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ConversationCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = ""
+
+
+class ChatMessage(BaseModel):
+    """One persisted message in a conversation."""
+
+    id: str
+    conversation_id: str
+    role: Literal["user", "assistant", "system"]
+    content: str
+    kind: Literal["text", "ack", "approval_request", "result", "error"]
+    run_id: str | None
+    created_at: datetime
+
+
+class SendMessageRequest(BaseModel):
+    """POST /conversations/{id}/messages body."""
+
+    model_config = ConfigDict(extra="forbid")
+    content: str = Field(min_length=1)
+
+
+class SendMessageResponse(BaseModel):
+    """Return for POST — caller can subscribe to SSE for the rest."""
+
+    user_message_id: str
+    assistant_message_ids: list[str]
+    messages: list[ChatMessage]

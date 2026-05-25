@@ -27,16 +27,15 @@ beforeEach(() => {
 describe("App shell", () => {
   it("renders the brand and sidebar navigation", async () => {
     render(<App />);
-    // findBy* waits for the Dashboard's effect to settle before asserting,
+    // findBy* lets the index route's effect settle before asserting,
     // which keeps React from logging an act() warning.
     expect(
-      await screen.findByRole("link", { name: /dashboard/i }),
+      await screen.findByRole("link", { name: /chat/i }),
     ).toBeInTheDocument();
-    // Dashboard also links "Workflows" / "Runs" inline, so getAllByRole.
-    expect(screen.getAllByRole("link", { name: /workflows/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: /runs/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /workflows/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /runs/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /settings/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /chat/i })).toBeInTheDocument();
   });
 
   it("shows the version + brand strapline", async () => {
@@ -47,10 +46,10 @@ describe("App shell", () => {
     ).toBeInTheDocument();
   });
 
-  it("lands on Dashboard at /", async () => {
+  it("lands on Chat at /", async () => {
     render(<App />);
     expect(
-      await screen.findByRole("heading", { name: /^dashboard$/i, level: 1 }),
+      await screen.findByRole("heading", { name: /^chat$/i, level: 1 }),
     ).toBeInTheDocument();
   });
 });

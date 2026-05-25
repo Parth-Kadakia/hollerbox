@@ -4,10 +4,13 @@
 
 import type {
   ApprovalDecision,
+  ChatMessage,
+  ConversationSummary,
   ProvidersResponse,
   RunDetail,
   RunSummary,
   SecretPresence,
+  SendMessageResponse,
   WorkflowDetail,
   WorkflowSummary,
   WorkflowValidateResponse,
@@ -155,6 +158,52 @@ export function setSetting(key: string, value: unknown) {
     method: "PUT",
     body: JSON.stringify({ value }),
   });
+}
+
+// --------------------------- conversations ---------------------------
+
+export function listConversations() {
+  return request<ConversationSummary[]>("/conversations");
+}
+
+export function createConversation(title = "") {
+  return request<ConversationSummary>("/conversations", {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function listMessages(convId: string) {
+  return request<ChatMessage[]>(`/conversations/${convId}/messages`);
+}
+
+export function sendMessage(convId: string, content: string) {
+  return request<SendMessageResponse>(`/conversations/${convId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  });
+}
+
+export function streamConversationEvents(
+  convId: string,
+  onMessage: (msg: ChatMessage) => void,
+  onDone?: () => void,
+  onError?: (err: Event) => void,
+): EventSource {
+  const es = new EventSource(`${BASE}/conversations/${convId}/events`);
+  es.addEventListener("message", (ev: MessageEvent) => {
+    try {
+      onMessage(JSON.parse(ev.data) as ChatMessage);
+    } catch {
+      // ignore malformed
+    }
+  });
+  es.addEventListener("done", () => {
+    onDone?.();
+    es.close();
+  });
+  if (onError) es.addEventListener("error", onError);
+  return es;
 }
 
 // --------------------------- SSE ---------------------------

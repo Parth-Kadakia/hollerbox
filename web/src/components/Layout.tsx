@@ -7,11 +7,11 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { to: "/", label: "Dashboard", end: true },
+  { to: "/", label: "Chat", end: true },
+  { to: "/dashboard", label: "Dashboard" },
   { to: "/workflows", label: "Workflows" },
   { to: "/runs", label: "Runs" },
   { to: "/settings", label: "Settings" },
-  { to: "/chat", label: "Chat" },
 ];
 
 export default function Layout() {

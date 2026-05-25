@@ -13,14 +13,14 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<Chat />} />
+          <Route path="dashboard" element={<Dashboard />} />
           <Route path="workflows" element={<Workflows />} />
           <Route path="workflows/new" element={<Editor />} />
           <Route path="workflows/:name/edit" element={<Editor />} />
           <Route path="runs" element={<Runs />} />
           <Route path="runs/:runId" element={<RunDetail />} />
           <Route path="settings" element={<Settings />} />
-          <Route path="chat" element={<Chat />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

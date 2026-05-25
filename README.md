@@ -13,7 +13,7 @@
   <a href="https://github.com/Parth-Kadakia/hollerbox/actions"><img src="https://github.com/Parth-Kadakia/hollerbox/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/status-phase%204%20complete-green.svg" alt="Status">
+  <img src="https://img.shields.io/badge/status-phase%205%20complete-green.svg" alt="Status">
 </p>
 
 ---
@@ -81,8 +81,9 @@ logic. HollerBox is the opposite:
 | ✅ | CLI: `validate`, `run`, `runs`, `run-detail`, `approve`, `reject`, `secret` group, `providers list` |
 | ✅ | **HTTP API + background worker + SSE** (Phase 3) — FastAPI server wraps the engine: workflows CRUD, run enqueue, approve / reject / cancel, run list & detail, write-only secrets, settings, providers, live SSE event stream. OpenAPI docs at `/docs`. |
 | ✅ | **Web UI core** (Phase 4) — Dashboard / Workflows / Editor (Monaco + live validation) / Runs / Run detail (live SSE trace + approve / reject / cancel) / Settings (providers + secrets). React + TS + Tailwind v4 + react-router + Monaco. |
-| ✅ | 265 backend tests + 8 web tests, all green, all offline. CI on every push (pytest + ruff for backend, Vite build + Vitest for web) |
-| ⏳ | Chat interface, scheduling, agent step, PWA (Phases 5–8) |
+| ✅ | **Conversational interface** (Phase 5) — chat router (LLM-driven), session manager, "reply YES to confirm" approval flow, inline approval cards. `/` is the chat page; text the engine and it picks the right workflow, asks before destructive steps, and replies with the result. |
+| ✅ | 291 backend tests + 8 web tests, all green, all offline. CI on every push (pytest + ruff for backend, Vite build + Vitest for web) |
+| ⏳ | Workflow authoring UX (templates + form builder), scheduling, agent step, PWA (Phases 6–8) |
 
 ## Try it in 60 seconds
 
@@ -358,6 +359,11 @@ Interactive OpenAPI docs at [http://127.0.0.1:8787/docs](http://127.0.0.1:8787/d
 | `POST /runs/{id}/approve` | Resume a paused run |
 | `POST /runs/{id}/reject` | Cancel a paused run |
 | `POST /runs/{id}/cancel` | Cancel queued / paused / running |
+| `GET /conversations` | List chat conversations |
+| `POST /conversations` | Start a new conversation |
+| `GET /conversations/{id}/messages` | Full message thread |
+| `POST /conversations/{id}/messages` | Send a user message; returns updated thread |
+| `GET /conversations/{id}/events` | **SSE** stream — `message`, `done` events |
 | `GET /providers` | Active text + image providers + status |
 | `GET /secrets` | List names only — values are **never** returned |
 | `PUT /secrets/{name}` | Write/rotate a secret value |
@@ -498,7 +504,7 @@ tested. Status as of the latest commit:
 | 2c | Image step + OpenAI (`gpt-image-1`) and Gemini (`gemini-3.1-flash-image-preview`) image providers — bonus extension to Phase 2 | ✅ |
 | 3 | HTTP API + background worker + SSE — workflows CRUD, run enqueue, approve/reject/cancel, providers/secrets/settings, live event stream | ✅ |
 | 4 | Web UI: Dashboard / Workflows / Editor (Monaco + live validation) / Run detail (SSE trace + approvals) / Settings | ✅ |
-| 5 | Conversational chat interface (the primary UX) | — |
+| 5 | Conversational chat interface — router / session / replies, "reply YES" flow, inline approval cards | ✅ |
 | 6 | Scheduling (cron + interval) | — |
 | 7 | Agent step + agent fallback in chat | — |
 | 8 | PWA + push notifications + optional external channels | — |
