@@ -1,0 +1,196 @@
+"""Repository helpers — thin, intentional CRUD over SQLAlchemy.
+
+The Runner doesn't talk to SQLAlchemy directly; it goes through these
+functions so that swapping the store (Postgres, Redis cache) later is a
+local change.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, Sequence
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from hollerbox.core.workflow import Workflow
+from hollerbox.store.models import (
+    RunRow,
+    SettingRow,
+    StepRunRow,
+    WorkflowRow,
+)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+# --------------------------- workflows ---------------------------
+
+def upsert_workflow(session: Session, workflow: Workflow, yaml_source: str) -> WorkflowRow:
+    """Insert or update the workflow row for a given (name, workspace_id=NULL)."""
+    existing = session.scalar(
+        select(WorkflowRow).where(
+            WorkflowRow.name == workflow.name,
+            WorkflowRow.workspace_id.is_(None),
+        )
+    )
+    if existing is None:
+        row = WorkflowRow(
+            name=workflow.name,
+            version=workflow.version,
+            description=workflow.description,
+            yaml_source=yaml_source,
+        )
+        session.add(row)
+        session.flush()
+        return row
+
+    existing.version = workflow.version
+    existing.description = workflow.description
+    existing.yaml_source = yaml_source
+    existing.updated_at = _utc_now()
+    session.flush()
+    return existing
+
+
+def get_workflow_by_name(session: Session, name: str) -> WorkflowRow | None:
+    return session.scalar(
+        select(WorkflowRow).where(
+            WorkflowRow.name == name,
+            WorkflowRow.workspace_id.is_(None),
+        )
+    )
+
+
+def list_workflows(session: Session) -> Sequence[WorkflowRow]:
+    return session.scalars(select(WorkflowRow).order_by(WorkflowRow.name)).all()
+
+
+# --------------------------- runs ---------------------------
+
+def create_run(
+    session: Session,
+    *,
+    workflow_id: str,
+    run_id: str,
+    inputs: dict[str, Any],
+    dry_run: bool,
+    trigger_kind: str = "manual",
+    conversation_id: str | None = None,
+) -> RunRow:
+    row = RunRow(
+        id=run_id,
+        workflow_id=workflow_id,
+        status="queued",
+        dry_run=dry_run,
+        inputs=inputs,
+        context_snapshot={},
+        trigger_kind=trigger_kind,
+        conversation_id=conversation_id,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def get_run(session: Session, run_id: str) -> RunRow | None:
+    return session.get(RunRow, run_id)
+
+
+def list_runs(
+    session: Session,
+    *,
+    workflow_name: str | None = None,
+    limit: int = 50,
+) -> Sequence[RunRow]:
+    stmt = select(RunRow).order_by(RunRow.created_at.desc()).limit(limit)
+    if workflow_name:
+        stmt = stmt.join(WorkflowRow).where(WorkflowRow.name == workflow_name)
+    return session.scalars(stmt).all()
+
+
+def update_run_status(
+    session: Session,
+    run: RunRow,
+    *,
+    status: str,
+    error: str | None = None,
+    context_snapshot: dict[str, Any] | None = None,
+    started_at: datetime | None = None,
+    finished_at: datetime | None = None,
+) -> RunRow:
+    run.status = status
+    if error is not None:
+        run.error = error
+    if context_snapshot is not None:
+        run.context_snapshot = context_snapshot
+    if started_at is not None:
+        run.started_at = started_at
+    if finished_at is not None:
+        run.finished_at = finished_at
+    session.flush()
+    return run
+
+
+# --------------------------- step_runs ---------------------------
+
+def record_step_run(
+    session: Session,
+    *,
+    run_id: str,
+    step_id: str,
+    step_type: str,
+    status: str,
+    resolved_input: dict[str, Any],
+    output: dict[str, Any],
+    logs: list[str],
+    error: str | None,
+    attempt: int,
+    started_at: datetime,
+    finished_at: datetime,
+) -> StepRunRow:
+    row = StepRunRow(
+        run_id=run_id,
+        step_id=step_id,
+        step_type=step_type,
+        status=status,
+        resolved_input=resolved_input,
+        output=output,
+        logs=logs,
+        error=error,
+        attempt=attempt,
+        started_at=started_at,
+        finished_at=finished_at,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def list_step_runs(session: Session, run_id: str) -> Sequence[StepRunRow]:
+    return session.scalars(
+        select(StepRunRow)
+        .where(StepRunRow.run_id == run_id)
+        .order_by(StepRunRow.created_at)
+    ).all()
+
+
+# --------------------------- settings ---------------------------
+
+def set_setting(session: Session, key: str, value: Any) -> SettingRow:
+    existing = session.get(SettingRow, key)
+    if existing is None:
+        row = SettingRow(key=key, value=value)
+        session.add(row)
+        session.flush()
+        return row
+    existing.value = value
+    session.flush()
+    return existing
+
+
+def get_setting(session: Session, key: str, default: Any = None) -> Any:
+    row = session.get(SettingRow, key)
+    return row.value if row is not None else default
