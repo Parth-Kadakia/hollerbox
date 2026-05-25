@@ -8,15 +8,14 @@ store code.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from hollerbox.store.models import Base
-
 
 DEFAULT_DATA_DIR = Path("~/.hollerbox").expanduser()
 DEFAULT_DB_FILENAME = "hollerbox.sqlite"
@@ -34,12 +33,11 @@ def make_engine(url: str | None = None, *, echo: bool = False) -> Engine:
     connection so cascade behavior actually fires in tests and runtime.
     """
     db_url = url or default_db_url()
-    if db_url.startswith("sqlite"):
+    if db_url.startswith("sqlite") and ":///" in db_url:
         # Ensure the parent dir exists for file-based sqlite.
-        if ":///" in db_url:
-            file_part = db_url.split(":///", 1)[1]
-            if file_part and file_part != ":memory:":
-                Path(file_part).expanduser().parent.mkdir(parents=True, exist_ok=True)
+        file_part = db_url.split(":///", 1)[1]
+        if file_part and file_part != ":memory:":
+            Path(file_part).expanduser().parent.mkdir(parents=True, exist_ok=True)
 
     engine = create_engine(
         db_url,

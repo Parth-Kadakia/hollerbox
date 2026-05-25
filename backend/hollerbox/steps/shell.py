@@ -52,7 +52,7 @@ class ShellStep(Step):
                 capture_output=True,
                 text=True,
             )
-        except subprocess.TimeoutExpired as exc:
+        except subprocess.TimeoutExpired:
             return StepResult.failed(
                 error=f"shell command timed out after {cfg.timeout}s",
                 logs=[f"$ {cfg.command}"],
@@ -68,19 +68,19 @@ class ShellStep(Step):
         logs = [f"$ {cfg.command}", f"exit {completed.returncode}"]
         # Bring captured streams into the logs (capped) so `run-detail`
         # surfaces real output without dumping unbounded text.
-        _MAX = 40
+        max_lines = 40
         if completed.stdout:
             stdout_lines = completed.stdout.rstrip("\n").splitlines()
             logs.append("stdout:")
-            logs.extend(stdout_lines[:_MAX])
-            if len(stdout_lines) > _MAX:
-                logs.append(f"  ... ({len(stdout_lines) - _MAX} more lines)")
+            logs.extend(stdout_lines[:max_lines])
+            if len(stdout_lines) > max_lines:
+                logs.append(f"  ... ({len(stdout_lines) - max_lines} more lines)")
         if completed.stderr:
             stderr_lines = completed.stderr.rstrip("\n").splitlines()
             logs.append("stderr:")
-            logs.extend(stderr_lines[:_MAX])
-            if len(stderr_lines) > _MAX:
-                logs.append(f"  ... ({len(stderr_lines) - _MAX} more lines)")
+            logs.extend(stderr_lines[:max_lines])
+            if len(stderr_lines) > max_lines:
+                logs.append(f"  ... ({len(stderr_lines) - max_lines} more lines)")
         if cfg.check and completed.returncode != 0:
             return StepResult(
                 status="failed",

@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from hollerbox.core.workflow import StepDefinition, Workflow
 from hollerbox.store import (
     ALL_TABLES,
-    RunRow,
-    StepRunRow,
-    WorkflowRow,
     init_db,
     make_engine,
     make_session_factory,
+    repo,
     session_scope,
 )
-from hollerbox.store import repo
 
 
 @pytest.fixture()
@@ -107,7 +104,7 @@ def test_create_run_and_record_steps_then_list(session_factory, sample_workflow)
         assert run.id == "run123"
         assert run.status == "queued"
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         repo.record_step_run(
             s,
             run_id="run123",
@@ -133,7 +130,7 @@ def test_create_run_and_record_steps_then_list(session_factory, sample_workflow)
 
 
 def test_update_run_status_transitions(session_factory, sample_workflow):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     with session_scope(session_factory) as s:
         wf = repo.upsert_workflow(s, sample_workflow, yaml_source="x")
         run = repo.create_run(

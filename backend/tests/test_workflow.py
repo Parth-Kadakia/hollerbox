@@ -14,7 +14,6 @@ from hollerbox.core.workflow import (
     load_workflows_dir,
 )
 
-
 # ---------- Model-level tests ----------
 
 class TestStepDefinition:

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 StepT = TypeVar("StepT", bound="type[Step]")
 
-_STEPS: dict[str, "type[Step]"] = {}
+_STEPS: dict[str, type[Step]] = {}
 
 
 def register_step(cls: StepT) -> StepT:
@@ -39,7 +39,7 @@ def register_step(cls: StepT) -> StepT:
     return cls
 
 
-def get_step_class(type_: str) -> "type[Step]":
+def get_step_class(type_: str) -> type[Step]:
     if type_ not in _STEPS:
         raise KeyError(
             f"Unknown step type '{type_}'. Registered: {sorted(_STEPS)!r}"

@@ -7,7 +7,7 @@ from hollerbox.core.workflow import StepDefinition
 from hollerbox.steps.python_step import PythonStep
 
 
-def _run(code: str, *, inputs: dict | None = None, steps: dict | None = None) -> "StepResult":
+def _run(code: str, *, inputs: dict | None = None, steps: dict | None = None):
     defn = StepDefinition(id="s", type="python_step", config={"code": code})
     step = PythonStep(defn)
     ctx = RunContext.new(inputs=inputs or {})

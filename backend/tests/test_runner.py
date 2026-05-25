@@ -17,9 +17,9 @@ from hollerbox.store import (
     init_db,
     make_engine,
     make_session_factory,
+    repo,
     session_scope,
 )
-from hollerbox.store import repo
 
 
 @pytest.fixture()

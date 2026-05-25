@@ -31,10 +31,9 @@ from hollerbox.store import (
     init_db,
     make_engine,
     make_session_factory,
+    repo,
     session_scope,
 )
-from hollerbox.store import repo
-
 
 _DB_URL_ENV = "HOLLERBOX_DB_URL"
 

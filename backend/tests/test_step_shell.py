@@ -7,7 +7,7 @@ from hollerbox.core.workflow import StepDefinition
 from hollerbox.steps.shell import ShellStep
 
 
-def _run(command: str, **kwargs) -> tuple[ShellStep, "StepResult"]:
+def _run(command: str, **kwargs):
     defn = StepDefinition(id="s", type="shell", config={"command": command, **kwargs})
     step = ShellStep(defn)
     ctx = RunContext.new(inputs={})

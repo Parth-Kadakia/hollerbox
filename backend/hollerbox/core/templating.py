@@ -81,10 +81,7 @@ def _resolve_path(path: str, scope: ResolverScope, *, redact_secrets: bool) -> A
 def _walk(parts: list[str], current: Any, full_path: str) -> Any:
     for depth, part in enumerate(parts, start=1):
         try:
-            if isinstance(current, dict):
-                current = current[part]
-            else:
-                current = getattr(current, part)
+            current = current[part] if isinstance(current, dict) else getattr(current, part)
         except (KeyError, AttributeError, TypeError) as exc:
             raise UnresolvedReferenceError(
                 f"Failed to resolve ${{{full_path}}}: missing '{part}' at depth {depth}"

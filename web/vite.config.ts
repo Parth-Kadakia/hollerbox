@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -7,6 +8,12 @@ import { VitePWA } from "vite-plugin-pwa";
 // PWA + push wiring lands in Phase 8; the plugin is included now so dev parity
 // stays close to prod from day one.
 export default defineConfig({
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./src/test/setup.ts"],
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+  },
   plugins: [
     react(),
     tailwindcss(),

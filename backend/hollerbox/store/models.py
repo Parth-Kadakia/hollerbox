@@ -14,16 +14,15 @@ Postgres option.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
-    Float,
     ForeignKey,
     Integer,
-    JSON,
     LargeBinary,
     String,
     Text,
@@ -37,7 +36,7 @@ def _uuid_hex() -> str:
 
 
 def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Base(DeclarativeBase):
@@ -63,8 +62,8 @@ class WorkflowRow(Base):
     )
     workspace_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
-    runs: Mapped[list["RunRow"]] = relationship(back_populates="workflow")
-    schedules: Mapped[list["ScheduleRow"]] = relationship(back_populates="workflow")
+    runs: Mapped[list[RunRow]] = relationship(back_populates="workflow")
+    schedules: Mapped[list[ScheduleRow]] = relationship(back_populates="workflow")
 
     __table_args__ = (
         UniqueConstraint("name", "workspace_id", name="uq_workflows_name_per_workspace"),
@@ -107,7 +106,7 @@ class RunRow(Base):
     )
 
     workflow: Mapped[WorkflowRow] = relationship(back_populates="runs")
-    steps: Mapped[list["StepRunRow"]] = relationship(
+    steps: Mapped[list[StepRunRow]] = relationship(
         back_populates="run", order_by="StepRunRow.created_at", cascade="all, delete-orphan"
     )
 
@@ -182,7 +181,7 @@ class ConversationRow(Base):
     )
     workspace_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
-    messages: Mapped[list["MessageRow"]] = relationship(
+    messages: Mapped[list[MessageRow]] = relationship(
         back_populates="conversation",
         order_by="MessageRow.created_at",
         cascade="all, delete-orphan",

@@ -32,8 +32,8 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Iterable
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -41,13 +41,13 @@ from hollerbox import registry
 from hollerbox.core.context import RunContext
 from hollerbox.core.workflow import StepDefinition, Workflow
 from hollerbox.providers.base import Provider
-from hollerbox.store import repo, session_scope
-from hollerbox.store.models import RunRow, StepRunRow, WorkflowRow
 from hollerbox.steps.base import Step, StepResult
+from hollerbox.store import repo, session_scope
+from hollerbox.store.models import StepRunRow
 
 
 def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @dataclass
@@ -301,27 +301,27 @@ class Runner:
                 error=last_result.error,
             )
 
-            if last_result.status == "failed":
-                if defn.on_error == "stop" or defn.on_error == "retry":
-                    # `retry` reaches here only after exhausting max_attempts.
-                    with session_scope(self._sf) as session:
-                        run_row = repo.get_run(session, run_id)
-                        repo.update_run_status(
-                            session,
-                            run_row,
-                            status="failed",
-                            error=last_error or "step failed",
-                            context_snapshot=ctx.snapshot(),
-                            finished_at=_utc_now(),
-                        )
-                    return RunnerResult(
-                        run_id=run_id,
+            # Fatal-failure path: stop the run. `on_error=retry` reaches here
+            # only after the retry loop has exhausted max_attempts.
+            # `on_error=continue` falls through silently — its failure is
+            # recorded but the workflow proceeds.
+            if last_result.status == "failed" and defn.on_error in ("stop", "retry"):
+                with session_scope(self._sf) as session:
+                    run_row = repo.get_run(session, run_id)
+                    repo.update_run_status(
+                        session,
+                        run_row,
                         status="failed",
-                        error=last_error,
-                        last_step_id=defn.id,
+                        error=last_error or "step failed",
+                        context_snapshot=ctx.snapshot(),
+                        finished_at=_utc_now(),
                     )
-                # on_error == "continue" — workflow proceeds, this step's
-                # failure is recorded but not fatal.
+                return RunnerResult(
+                    run_id=run_id,
+                    status="failed",
+                    error=last_error,
+                    last_step_id=defn.id,
+                )
 
         # All steps completed (success, dry_run, or continue-on-fail).
         with session_scope(self._sf) as session:

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from hollerbox.core import templating
@@ -33,7 +33,7 @@ class RunContext:
         settings: dict[str, Any] | None = None,
         run_id: str | None = None,
     ) -> RunContext:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         run = {
             "id": run_id or uuid.uuid4().hex,
             "date": now.date().isoformat(),
