@@ -176,30 +176,44 @@ export default function ChatPage() {
           <p className="text-xs text-ink/40">no past chats</p>
         )}
         <ul className="space-y-0.5">
-          {conversations.map((c) => (
-            <li key={c.id} className="group flex items-center gap-1">
-              <Link
-                to={`/chat/${c.id}`}
-                className={[
-                  "flex-1 px-2 py-1.5 rounded text-xs truncate",
-                  c.id === convId
-                    ? "bg-terracotta/15 text-terracotta font-medium"
-                    : "text-ink/70 hover:bg-ink/5 hover:text-ink",
-                ].join(" ")}
-                title={`${c.title}\n${timeAgo(c.updated_at)}`}
-              >
-                {c.title}
-              </Link>
-              <button
-                onClick={() => removeConversation(c.id)}
-                aria-label="Delete chat"
-                title="Delete chat"
-                className="opacity-0 group-hover:opacity-100 transition-opacity text-ink/40 hover:text-red-600 px-1 text-xs"
-              >
-                ×
-              </button>
-            </li>
-          ))}
+          {conversations.map((c) => {
+            const label = c.title?.trim() || "New chat";
+            const active = c.id === convId;
+            return (
+              <li key={c.id} className="group flex items-center gap-1">
+                <Link
+                  to={`/chat/${c.id}`}
+                  className={[
+                    "flex-1 min-w-0 px-2 py-1.5 rounded",
+                    active
+                      ? "bg-terracotta/15 text-terracotta"
+                      : "hover:bg-ink/5",
+                  ].join(" ")}
+                  title={`${label}\n${timeAgo(c.updated_at)}`}
+                >
+                  <div
+                    className={[
+                      "text-xs truncate",
+                      active ? "font-medium" : "text-ink/80",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </div>
+                  <div className="text-[10px] text-ink/40 truncate">
+                    {timeAgo(c.updated_at)}
+                  </div>
+                </Link>
+                <button
+                  onClick={() => removeConversation(c.id)}
+                  aria-label="Delete chat"
+                  title="Delete chat"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-ink/40 hover:text-red-600 px-1 text-xs"
+                >
+                  ×
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </aside>
 
