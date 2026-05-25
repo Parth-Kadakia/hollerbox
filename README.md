@@ -245,33 +245,49 @@ sellable later as a hosted product without a rewrite.
 ## Install
 
 You need:
-- **Python 3.11+** — [`uv`](https://docs.astral.sh/uv/) recommended (much
-  faster than `pip`/`venv` for this project's small dep tree)
-- **Node 20+** for the web shell (only needed if you're touching the UI;
-  Phase 0 boots an empty React + Vite + Tailwind + PWA app)
+- **Python 3.11+** — [`uv`](https://docs.astral.sh/uv/) (auto-installed by the
+  bootstrap if missing)
+- **Node 20+** for the web app (optional — engine works without it)
 
-Clone and install:
+### One-shot bootstrap (recommended)
 
 ```bash
 git clone https://github.com/Parth-Kadakia/hollerbox.git
 cd hollerbox
+./setup.sh
 ```
+
+`setup.sh` is safe to re-run. It checks prerequisites, installs `uv` if you
+don't have it, syncs backend deps (including the LLM SDKs), runs the test
+suite, installs web deps, builds the web app once to catch any TS / Vite
+regressions, and prints a list of things to try.
+
+Skip flags (set as env vars before running):
+- `HOLLERBOX_SKIP_LLM=1` — don't install the anthropic / openai SDKs
+- `HOLLERBOX_SKIP_WEB=1` — don't touch `web/` at all
+- `HOLLERBOX_SKIP_TESTS=1` — install only, don't run pytest / npm test
+
+### Day-2 commands (Makefile shortcuts)
+
+```bash
+make help          # list all targets
+make test          # run backend + web tests
+make ci            # run exactly what CI runs (ruff + pytest + npm build + vitest)
+make dev           # start the web dev server
+make ruff          # auto-fix lint issues in backend
+make clean         # remove .venv, node_modules, caches
+```
+
+### Manual install (if you don't want the script)
 
 ```bash
 cd backend
-uv sync --extra dev
-uv run hollerbox --help
-uv run pytest
-```
-
-Optional — install the LLM SDKs (Anthropic + OpenAI) and the web app:
-
-```bash
 uv sync --extra dev --extra llm
+uv run hollerbox --help
 ```
 
 ```bash
-cd ../web
+cd web
 npm install
 npm run dev
 ```
