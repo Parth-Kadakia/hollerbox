@@ -1,0 +1,40 @@
+# Demo: a small destructive pipeline that fans out
+# shell → python_step → write_file (destructive, requires confirmation).
+#
+# Try:
+#   hollerbox run workflows/examples/file_pipeline.yaml --dry-run
+#   hollerbox run workflows/examples/file_pipeline.yaml --input out_path=/tmp/hb-demo.txt
+#   hollerbox approve <run-id>   # (after the paused prompt)
+name: file_pipeline
+version: 1
+description: Build a tiny report from system info and save it to disk.
+chat_examples:
+  - "build me a system snapshot"
+inputs:
+  out_path: "/tmp/hollerbox-demo.txt"
+steps:
+  - id: uname
+    type: shell
+    config:
+      command: "uname -a"
+
+  - id: compose
+    type: python_step
+    config:
+      code: |
+        import datetime as dt
+        host = steps["uname"]["output"]["stdout"].strip()
+        report = (
+          f"# HollerBox demo report\n\n"
+          f"Generated: {dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')}\n"
+          f"Host: {host}\n"
+        )
+        output = {"report": report}
+
+  - id: save
+    type: write_file
+    requires_confirmation: true   # forces an approval pause even outside chat
+    config:
+      path: "${inputs.out_path}"
+      content: "${steps.compose.output.report}"
+      mode: overwrite

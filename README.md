@@ -11,7 +11,7 @@
 
 ---
 
-> **Status:** Early scaffold. The package installs, the test suite is green, and the web dev server boots — but no real workflows execute yet. See [Roadmap](#roadmap) for what's coming.
+> **Status:** Phase 1 complete — the engine runs YAML workflows end-to-end with dry-run, approval pauses, retry policy, and full persistence. Web UI, chat, scheduling, and LLM providers are still ahead. See [Roadmap](#roadmap) for what's coming.
 
 ## What is it?
 
@@ -41,7 +41,13 @@ cd hollerbox
 cd backend
 uv sync --extra dev
 uv run hollerbox --help
-uv run pytest          # 5 tests, all green
+uv run pytest          # 145 tests, all green
+
+# Try a workflow
+uv run hollerbox validate ../workflows/hello.yaml
+uv run hollerbox run ../workflows/hello.yaml --input who=you
+uv run hollerbox runs
+uv run hollerbox run-detail <run-id-prefix>
 
 # Web
 cd ../web
@@ -71,8 +77,8 @@ before the next one starts.
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Repo scaffold, package installs, web shell boots | ✅ |
-| 1 | Core engine, YAML workflows, shell/http/file steps, SQLite persistence | ⏳ |
-| 2 | LLM providers (Anthropic, OpenAI, Ollama) + encrypted secret store | — |
+| 1 | Core engine: YAML workflows, 5 step types, dry-run + approvals + retry, SQLite persistence, CLI | ✅ |
+| 2 | LLM providers (Anthropic, OpenAI, Ollama) + encrypted secret store | ⏳ |
 | 3 | HTTP API + SSE for live run traces | — |
 | 4 | Web UI: dashboard, YAML editor, run trace, approvals | — |
 | 5 | Conversational chat interface (the primary UX) | — |

@@ -66,11 +66,26 @@ class ShellStep(Step):
             "stderr": completed.stderr,
         }
         logs = [f"$ {cfg.command}", f"exit {completed.returncode}"]
+        # Bring captured streams into the logs (capped) so `run-detail`
+        # surfaces real output without dumping unbounded text.
+        _MAX = 40
+        if completed.stdout:
+            stdout_lines = completed.stdout.rstrip("\n").splitlines()
+            logs.append("stdout:")
+            logs.extend(stdout_lines[:_MAX])
+            if len(stdout_lines) > _MAX:
+                logs.append(f"  ... ({len(stdout_lines) - _MAX} more lines)")
+        if completed.stderr:
+            stderr_lines = completed.stderr.rstrip("\n").splitlines()
+            logs.append("stderr:")
+            logs.extend(stderr_lines[:_MAX])
+            if len(stderr_lines) > _MAX:
+                logs.append(f"  ... ({len(stderr_lines) - _MAX} more lines)")
         if cfg.check and completed.returncode != 0:
             return StepResult(
                 status="failed",
                 output=output,
-                logs=logs + (completed.stderr.splitlines() if completed.stderr else []),
+                logs=logs,
                 error=f"command exited with status {completed.returncode}",
             )
         return StepResult.success(output=output, logs=logs)
