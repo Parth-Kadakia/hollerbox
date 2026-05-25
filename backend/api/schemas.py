@@ -146,6 +146,21 @@ class ConversationCreateRequest(BaseModel):
     title: str = ""
 
 
+class MessageAttachment(BaseModel):
+    """A file produced by a step the chat result references.
+
+    `url` is always relative to the API base (e.g. `/files?path=...`),
+    not absolute. `kind` lets the UI render images inline and other
+    files as download links.
+    """
+
+    kind: Literal["image", "file"]
+    path: str
+    url: str
+    name: str
+    size_bytes: int | None = None
+
+
 class ChatMessage(BaseModel):
     """One persisted message in a conversation."""
 
@@ -156,6 +171,7 @@ class ChatMessage(BaseModel):
     kind: Literal["text", "ack", "approval_request", "result", "error"]
     run_id: str | None
     created_at: datetime
+    attachments: list[MessageAttachment] = Field(default_factory=list)
 
 
 class SendMessageRequest(BaseModel):

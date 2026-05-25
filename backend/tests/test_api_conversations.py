@@ -136,3 +136,76 @@ def test_send_message_409_when_no_provider(api_client, api_surface) -> None:
     resp = api_client.post(f"/conversations/{cid}/messages", json={"content": "hi"})
     assert resp.status_code == 409
     assert "provider" in resp.json()["detail"].lower()
+
+
+# --------------------------- attachments ---------------------------
+
+def test_result_message_carries_file_attachments(api_client, api_surface, tmp_path) -> None:
+    """A workflow that writes a file should surface it as an attachment on the result message."""
+    target = tmp_path / "report.txt"
+    yaml_src = (
+        "name: writes\n"
+        "chat_examples: [run writes]\n"
+        "steps:\n"
+        "  - id: write\n"
+        "    type: write_file\n"
+        "    config:\n"
+        f"      path: {target}\n"
+        '      content: "hello"\n'
+    )
+    api_client.put("/workflows/writes", json={"yaml_source": yaml_src})
+    _script(api_surface, {"action": "run_workflow", "workflow": "writes", "inputs": {}})
+
+    cid = _create_conv(api_client)
+    api_client.post(f"/conversations/{cid}/messages", json={"content": "run it"})
+    Worker(api_surface).drive_one()
+    # write_file is destructive — chat triggers pause for approval. Refresh
+    # the thread, then approve via chat to drive the step to success.
+    from hollerbox.conversation import ConversationSession, Router
+    sess = ConversationSession(
+        api_surface.session_factory,
+        runner=api_surface.runner,
+        router=Router(api_surface.providers["mock"]),
+    )
+    sess.refresh(cid)
+    api_client.post(f"/conversations/{cid}/messages", json={"content": "yes"})
+
+    msgs = api_client.get(f"/conversations/{cid}/messages").json()
+    result = next(m for m in msgs if m["kind"] == "result")
+    assert result["attachments"]
+    att = result["attachments"][0]
+    assert att["name"] == "report.txt"
+    assert att["kind"] == "file"
+    assert att["url"].startswith("/files?path=")
+
+
+def test_image_extension_marks_attachment_as_image(api_client, api_surface, tmp_path) -> None:
+    target = tmp_path / "pic.png"
+    # write_file is a quick way to fake an image — we only test the
+    # classifier, not the bytes.
+    yaml_src = (
+        "name: paints\n"
+        "chat_examples: [paint]\n"
+        "steps:\n"
+        "  - id: write\n"
+        "    type: write_file\n"
+        "    config:\n"
+        f"      path: {target}\n"
+        '      content: "fake png"\n'
+    )
+    api_client.put("/workflows/paints", json={"yaml_source": yaml_src})
+    _script(api_surface, {"action": "run_workflow", "workflow": "paints", "inputs": {}})
+    cid = _create_conv(api_client)
+    api_client.post(f"/conversations/{cid}/messages", json={"content": "paint"})
+    Worker(api_surface).drive_one()
+    from hollerbox.conversation import ConversationSession, Router
+    ConversationSession(
+        api_surface.session_factory,
+        runner=api_surface.runner,
+        router=Router(api_surface.providers["mock"]),
+    ).refresh(cid)
+    api_client.post(f"/conversations/{cid}/messages", json={"content": "yes"})
+
+    msgs = api_client.get(f"/conversations/{cid}/messages").json()
+    result = next(m for m in msgs if m["kind"] == "result")
+    assert result["attachments"][0]["kind"] == "image"

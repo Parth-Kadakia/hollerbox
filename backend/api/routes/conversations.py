@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import mimetypes
 from collections.abc import AsyncIterator
+from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sse_starlette.sse import EventSourceResponse
@@ -20,6 +23,7 @@ from api.schemas import (
     ChatMessage,
     ConversationCreateRequest,
     ConversationSummary,
+    MessageAttachment,
     SendMessageRequest,
     SendMessageResponse,
 )
@@ -56,7 +60,14 @@ def _build_session(surface: EngineSurface) -> ConversationSession:
     )
 
 
-def _msg_to_schema(row: MessageRow) -> ChatMessage:
+_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+
+
+def _msg_to_schema(
+    row: MessageRow,
+    *,
+    attachments: list[MessageAttachment] | None = None,
+) -> ChatMessage:
     return ChatMessage(
         id=row.id,
         conversation_id=row.conversation_id,
@@ -65,7 +76,67 @@ def _msg_to_schema(row: MessageRow) -> ChatMessage:
         kind=row.kind,  # type: ignore[arg-type]
         run_id=row.run_id,
         created_at=row.created_at,
+        attachments=attachments or [],
     )
+
+
+def _attachments_for_run(surface: EngineSurface, run_id: str) -> list[MessageAttachment]:
+    """Pull every file path out of a run's step outputs and turn it into
+    an attachment record the UI can render."""
+    out: list[MessageAttachment] = []
+    seen_paths: set[str] = set()
+    with session_scope(surface.session_factory) as s:
+        steps = list(repo.list_step_runs(s, run_id))
+    for step in steps:
+        if step.status != "success":
+            continue
+        candidates: list[str] = []
+        for key in ("path", "out_path", "output_path"):
+            v = (step.output or {}).get(key)
+            if isinstance(v, str):
+                candidates.append(v)
+        for key in ("paths", "files", "outputs"):
+            v = (step.output or {}).get(key)
+            if isinstance(v, list):
+                for item in v:
+                    if isinstance(item, str):
+                        candidates.append(item)
+        for raw in candidates:
+            p = Path(raw).expanduser()
+            norm = str(p.resolve(strict=False))
+            if norm in seen_paths:
+                continue
+            seen_paths.add(norm)
+            is_image = p.suffix.lower() in _IMAGE_EXTS or (
+                (mimetypes.guess_type(p.name)[0] or "").startswith("image/")
+            )
+            size = p.stat().st_size if p.is_file() else None
+            out.append(
+                MessageAttachment(
+                    kind="image" if is_image else "file",
+                    path=norm,
+                    url=f"/files?path={quote(norm)}",
+                    name=p.name,
+                    size_bytes=size,
+                )
+            )
+    return out
+
+
+def _build_messages(
+    surface: EngineSurface, conv_id: str
+) -> list[ChatMessage]:
+    """List a conversation's messages with computed attachments."""
+    with session_scope(surface.session_factory) as s:
+        rows = list(repo.list_messages(s, conv_id))
+    cache: dict[str, list[MessageAttachment]] = {}
+    out: list[ChatMessage] = []
+    for row in rows:
+        atts: list[MessageAttachment] = []
+        if row.run_id and row.kind == "result":
+            atts = cache.setdefault(row.run_id, _attachments_for_run(surface, row.run_id))
+        out.append(_msg_to_schema(row, attachments=atts))
+    return out
 
 
 # --------------------------- CRUD ---------------------------
@@ -108,7 +179,7 @@ def list_messages(
         conv = repo.get_conversation(s, conv_id)
         if conv is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"conversation {conv_id!r} not found")
-        return [_msg_to_schema(m) for m in repo.list_messages(s, conv_id)]
+    return _build_messages(surface, conv_id)
 
 
 # --------------------------- send ---------------------------
@@ -141,8 +212,7 @@ def send_message(
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
 
     # Snapshot the whole thread so the client can render without a second roundtrip.
-    with session_scope(surface.session_factory) as s:
-        msgs = [_msg_to_schema(m) for m in repo.list_messages(s, conv_id)]
+    msgs = _build_messages(surface, conv_id)
     return SendMessageResponse(
         user_message_id=turn.user_message_id,
         assistant_message_ids=turn.assistant_message_ids,
@@ -179,7 +249,7 @@ async def stream_conversation_events(
             session.refresh(conv_id)
 
             with session_scope(surface.session_factory) as s:
-                msgs = list(repo.list_messages(s, conv_id))
+                msg_rows = list(repo.list_messages(s, conv_id))
                 # Are there any non-terminal runs the user is waiting on?
                 from sqlalchemy import select
 
@@ -192,12 +262,17 @@ async def stream_conversation_events(
                     .limit(1)
                 )
 
-            new_msgs = [m for m in msgs if m.id not in seen_ids]
+            new_rows = [m for m in msg_rows if m.id not in seen_ids]
+            new_msgs = (
+                [m for m in _build_messages(surface, conv_id) if m.id in {r.id for r in new_rows}]
+                if new_rows
+                else []
+            )
             for m in new_msgs:
                 seen_ids.add(m.id)
                 yield {
                     "event": "message",
-                    "data": _msg_to_schema(m).model_dump_json(),
+                    "data": m.model_dump_json(),
                 }
 
             if active is None and not new_msgs:

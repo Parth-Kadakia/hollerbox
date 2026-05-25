@@ -46,8 +46,13 @@ def _preview_value(output: dict) -> str:
     if "text" in output and isinstance(output["text"], str):
         text = output["text"].strip()
         return text if len(text) <= 240 else text[:237] + "…"
-    if "path" in output:
+    if isinstance(output.get("path"), str):
         return f"wrote {output['path']}"
+    if isinstance(output.get("paths"), list) and output["paths"]:
+        paths = [str(p) for p in output["paths"] if isinstance(p, str)]
+        if len(paths) == 1:
+            return f"wrote {paths[0]}"
+        return f"wrote {len(paths)} files: {paths[0]} …"
     if "stdout" in output and isinstance(output["stdout"], str):
         out = output["stdout"].strip()
         return out if len(out) <= 240 else out[:237] + "…"

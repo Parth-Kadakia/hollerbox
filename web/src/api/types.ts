@@ -101,6 +101,16 @@ export interface ConversationSummary {
 
 export type MessageKind = "text" | "ack" | "approval_request" | "result" | "error";
 
+export interface MessageAttachment {
+  kind: "image" | "file";
+  /** Absolute path on the server's filesystem (informational only). */
+  path: string;
+  /** API-relative URL — prepend the API base when rendering. */
+  url: string;
+  name: string;
+  size_bytes: number | null;
+}
+
 export interface ChatMessage {
   id: string;
   conversation_id: string;
@@ -109,6 +119,7 @@ export interface ChatMessage {
   kind: MessageKind;
   run_id: string | null;
   created_at: string;
+  attachments: MessageAttachment[];
 }
 
 export interface SendMessageResponse {

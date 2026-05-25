@@ -22,6 +22,7 @@ from api.deps import EngineSurface, build_surface
 from api.routes import (
     approvals,
     conversations,
+    files,
     health,
     providers,
     runs,
@@ -78,6 +79,7 @@ def create_app() -> FastAPI:
     app.include_router(secrets.router)
     app.include_router(settings.router)
     app.include_router(conversations.router)
+    app.include_router(files.router)
     return app
 
 
