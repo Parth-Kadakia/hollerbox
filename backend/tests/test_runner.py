@@ -192,6 +192,46 @@ def test_resume_with_approval_continues_to_completion(runner, session_factory, t
         assert after.status == "success"
 
 
+def test_resume_preserves_providers_and_image_providers(session_factory, tmp_path: Path):
+    """Regression: after approval, the resumed step must see the same
+    `providers` / `image_providers` the original execute() saw. Earlier
+    bug: the CLI's _resolve_and_load() built a bare Runner, leaving both
+    dicts empty for any image/llm step that resumed after approval."""
+    from hollerbox.providers.image_base import ImageProvider, ImageResult
+    from hollerbox.providers.mock import MockProvider
+
+    class _FakeImage(ImageProvider):
+        name = "fake"
+
+        def generate(self, **kw):
+            return ImageResult(images=[b"PNG-resumed"], model="fake-1")
+
+    out = tmp_path / "via-resume.png"
+    runner_with_providers = Runner(
+        session_factory,
+        providers={"mock": MockProvider()},
+        image_providers={"fake": _FakeImage()},
+    )
+
+    wf = _wf(
+        [
+            StepDefinition(
+                id="render",
+                type="image",
+                config={"provider": "fake", "prompt": "x", "save_to": str(out)},
+                requires_confirmation=True,
+            ),
+        ]
+    )
+    paused = runner_with_providers.execute(wf)
+    assert paused.status == "paused"
+    assert not out.exists()
+
+    final = runner_with_providers.resume(wf, run_id=paused.run_id, approved=True)
+    assert final.status == "success", f"expected success, got {final.status} err={final.error}"
+    assert out.read_bytes() == b"PNG-resumed"
+
+
 def test_resume_rejected_marks_cancelled(runner, session_factory, tmp_path: Path):
     target = tmp_path / "out.txt"
     wf = _approval_workflow(target)

@@ -447,8 +447,12 @@ def run_detail(run_id: str, logs: bool) -> None:
 # --------------------------- approve / reject ---------------------------
 
 def _resolve_and_load(run_id_or_prefix: str) -> tuple[Runner, str, Workflow]:
+    # Use _build_runner() so the resumed run sees the same providers,
+    # image_providers, and secret store as a fresh `hollerbox run`.
+    # Bypassing _build_runner here was the bug that left ctx.image_providers
+    # empty on approve, failing any resumed step that needed a provider.
+    runner = _build_runner()
     sf = _build_session_factory()
-    runner = Runner(sf, secret_store=SecretStore(sf, key_path=_resolved_key_path()))
     with session_scope(sf) as s:
         run = repo.get_run(s, run_id_or_prefix)
         if run is None and len(run_id_or_prefix) < 32:
