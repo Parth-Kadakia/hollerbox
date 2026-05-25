@@ -173,6 +173,10 @@ export function createConversation(title = "") {
   });
 }
 
+export function deleteConversation(convId: string) {
+  return request<void>(`/conversations/${convId}`, { method: "DELETE" });
+}
+
 export function listMessages(convId: string) {
   return request<ChatMessage[]>(`/conversations/${convId}/messages`);
 }

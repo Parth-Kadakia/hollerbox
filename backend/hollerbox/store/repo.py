@@ -288,3 +288,26 @@ def list_messages(session: Session, conversation_id: str) -> Sequence[MessageRow
         .where(MessageRow.conversation_id == conversation_id)
         .order_by(MessageRow.created_at)
     ).all()
+
+
+def delete_conversation(session: Session, conversation_id: str) -> bool:
+    """Delete a conversation and its messages. Returns True if it existed.
+
+    Linked runs are decoupled (FK set to NULL) so the run history in
+    /runs and /runs/{id} stays intact — deleting a chat thread should
+    not destroy evidence of what the workflow actually did.
+    """
+    row = session.get(ConversationRow, conversation_id)
+    if row is None:
+        return False
+    # Detach runs first (FK is nullable on `runs.conversation_id`).
+    from hollerbox.store.models import RunRow
+
+    runs = session.scalars(
+        select(RunRow).where(RunRow.conversation_id == conversation_id)
+    ).all()
+    for r in runs:
+        r.conversation_id = None
+    session.delete(row)  # cascades to messages via relationship
+    session.flush()
+    return True

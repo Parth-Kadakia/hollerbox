@@ -70,6 +70,57 @@ def test_messages_404_for_missing_conv(api_client) -> None:
     assert api_client.get("/conversations/ghost/messages").status_code == 404
 
 
+def test_title_derived_from_first_user_message(api_client, api_surface) -> None:
+    _script(api_surface, {"action": "chitchat", "text": "hi"})
+    cid = _create_conv(api_client)
+    api_client.post(f"/conversations/{cid}/messages", json={"content": "summarize my email please"})
+    listing = api_client.get("/conversations").json()
+    assert listing[0]["title"] == "summarize my email please"
+
+
+def test_title_truncated_for_long_messages(api_client, api_surface) -> None:
+    _script(api_surface, {"action": "chitchat", "text": "hi"})
+    cid = _create_conv(api_client)
+    long_msg = "a" * 200
+    api_client.post(f"/conversations/{cid}/messages", json={"content": long_msg})
+    listing = api_client.get("/conversations").json()
+    assert listing[0]["title"].endswith("…")
+    assert len(listing[0]["title"]) <= 60
+
+
+def test_title_falls_back_to_new_chat_when_empty(api_client) -> None:
+    cid = _create_conv(api_client)
+    listing = api_client.get("/conversations").json()
+    assert listing[0]["title"] == "New chat"
+    assert cid  # bind for clarity
+
+
+def test_delete_conversation_removes_it_but_keeps_runs(api_client, api_surface) -> None:
+    api_client.put(
+        "/workflows/demo",
+        json={"yaml_source": SHELL_YAML},
+    )
+    _script(api_surface, {"action": "run_workflow", "workflow": "demo", "inputs": {}})
+    cid = _create_conv(api_client)
+    api_client.post(f"/conversations/{cid}/messages", json={"content": "run demo"})
+    Worker(api_surface).drive_one()
+
+    # The chat triggered a run — confirm it exists.
+    runs_before = api_client.get("/runs").json()
+    assert len(runs_before) == 1
+
+    resp = api_client.delete(f"/conversations/{cid}")
+    assert resp.status_code == 204
+    assert api_client.get("/conversations").json() == []
+    # The run survives — chat deletion is not a destructive op for run history.
+    runs_after = api_client.get("/runs").json()
+    assert len(runs_after) == 1
+
+
+def test_delete_404_for_missing_conv(api_client) -> None:
+    assert api_client.delete("/conversations/ghost").status_code == 404
+
+
 # --------------------------- chat flow ---------------------------
 
 def test_chitchat_records_assistant_reply(api_client, api_surface) -> None:

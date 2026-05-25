@@ -10,20 +10,18 @@ from __future__ import annotations
 
 import asyncio
 import json
-import mimetypes
 from collections.abc import AsyncIterator
-from pathlib import Path
-from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sse_starlette.sse import EventSourceResponse
 
+from api._attachments import attachments_for_output
 from api.deps import EngineSurface, get_surface
 from api.schemas import (
     ChatMessage,
     ConversationCreateRequest,
     ConversationSummary,
-    MessageAttachment,
+    FileAttachment,
     SendMessageRequest,
     SendMessageResponse,
 )
@@ -60,13 +58,10 @@ def _build_session(surface: EngineSurface) -> ConversationSession:
     )
 
 
-_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
-
-
 def _msg_to_schema(
     row: MessageRow,
     *,
-    attachments: list[MessageAttachment] | None = None,
+    attachments: list[FileAttachment] | None = None,
 ) -> ChatMessage:
     return ChatMessage(
         id=row.id,
@@ -80,46 +75,20 @@ def _msg_to_schema(
     )
 
 
-def _attachments_for_run(surface: EngineSurface, run_id: str) -> list[MessageAttachment]:
-    """Pull every file path out of a run's step outputs and turn it into
-    an attachment record the UI can render."""
-    out: list[MessageAttachment] = []
-    seen_paths: set[str] = set()
+def _attachments_for_run(surface: EngineSurface, run_id: str) -> list[FileAttachment]:
+    """Every file produced by any successful step in this run."""
     with session_scope(surface.session_factory) as s:
         steps = list(repo.list_step_runs(s, run_id))
+    out: list[FileAttachment] = []
+    seen: set[str] = set()
     for step in steps:
         if step.status != "success":
             continue
-        candidates: list[str] = []
-        for key in ("path", "out_path", "output_path"):
-            v = (step.output or {}).get(key)
-            if isinstance(v, str):
-                candidates.append(v)
-        for key in ("paths", "files", "outputs"):
-            v = (step.output or {}).get(key)
-            if isinstance(v, list):
-                for item in v:
-                    if isinstance(item, str):
-                        candidates.append(item)
-        for raw in candidates:
-            p = Path(raw).expanduser()
-            norm = str(p.resolve(strict=False))
-            if norm in seen_paths:
+        for att in attachments_for_output(step.output):
+            if att.path in seen:
                 continue
-            seen_paths.add(norm)
-            is_image = p.suffix.lower() in _IMAGE_EXTS or (
-                (mimetypes.guess_type(p.name)[0] or "").startswith("image/")
-            )
-            size = p.stat().st_size if p.is_file() else None
-            out.append(
-                MessageAttachment(
-                    kind="image" if is_image else "file",
-                    path=norm,
-                    url=f"/files?path={quote(norm)}",
-                    name=p.name,
-                    size_bytes=size,
-                )
-            )
+            seen.add(att.path)
+            out.append(att)
     return out
 
 
@@ -129,10 +98,10 @@ def _build_messages(
     """List a conversation's messages with computed attachments."""
     with session_scope(surface.session_factory) as s:
         rows = list(repo.list_messages(s, conv_id))
-    cache: dict[str, list[MessageAttachment]] = {}
+    cache: dict[str, list[FileAttachment]] = {}
     out: list[ChatMessage] = []
     for row in rows:
-        atts: list[MessageAttachment] = []
+        atts: list[FileAttachment] = []
         if row.run_id and row.kind == "result":
             atts = cache.setdefault(row.run_id, _attachments_for_run(surface, row.run_id))
         out.append(_msg_to_schema(row, attachments=atts))
@@ -141,18 +110,39 @@ def _build_messages(
 
 # --------------------------- CRUD ---------------------------
 
+def _derived_title(surface: EngineSurface, conv_id: str, stored: str) -> str:
+    """Use the stored title if set, otherwise the first user message (trimmed).
+
+    Computed on read so existing conversations get sensible titles without
+    a migration. Empty thread → "New chat".
+    """
+    if stored:
+        return stored
+    with session_scope(surface.session_factory) as s:
+        msgs = list(repo.list_messages(s, conv_id))
+    for m in msgs:
+        if m.role == "user" and m.content.strip():
+            text = m.content.strip().replace("\n", " ")
+            return text if len(text) <= 60 else text[:57] + "…"
+    return "New chat"
+
+
 @router.get("", response_model=list[ConversationSummary])
 def list_conversations(
     surface: EngineSurface = Depends(get_surface),
 ) -> list[ConversationSummary]:
     with session_scope(surface.session_factory) as s:
         rows = repo.list_conversations(s)
-        return [
-            ConversationSummary(
-                id=r.id, title=r.title, created_at=r.created_at, updated_at=r.updated_at
-            )
-            for r in rows
-        ]
+        snapshots = [(r.id, r.title, r.created_at, r.updated_at) for r in rows]
+    return [
+        ConversationSummary(
+            id=cid,
+            title=_derived_title(surface, cid, raw_title),
+            created_at=created,
+            updated_at=updated,
+        )
+        for cid, raw_title, created, updated in snapshots
+    ]
 
 
 @router.post(
@@ -167,8 +157,23 @@ def create_conversation(
     with session_scope(surface.session_factory) as s:
         row = repo.create_conversation(s, title=body.title)
         return ConversationSummary(
-            id=row.id, title=row.title, created_at=row.created_at, updated_at=row.updated_at
+            id=row.id,
+            title=row.title or "New chat",
+            created_at=row.created_at,
+            updated_at=row.updated_at,
         )
+
+
+@router.delete("/{conv_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_conversation(
+    conv_id: str, surface: EngineSurface = Depends(get_surface)
+) -> None:
+    """Delete a conversation + its messages. Linked runs are kept (detached)."""
+    with session_scope(surface.session_factory) as s:
+        if not repo.delete_conversation(s, conv_id):
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, f"conversation {conv_id!r} not found"
+            )
 
 
 @router.get("/{conv_id}/messages", response_model=list[ChatMessage])

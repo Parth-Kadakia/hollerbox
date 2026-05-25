@@ -30,21 +30,14 @@ def _all_step_output_paths(surface: EngineSurface) -> set[str]:
     so we materialize a snapshot in Python. Fine for v1 (single-user,
     local data); a real index lands when this becomes a hot path.
     """
+    from api._attachments import attachments_for_output
+
     seen: set[str] = set()
     with session_scope(surface.session_factory) as s:
         rows = s.scalars(select(StepRunRow)).all()
         for r in rows:
-            out = r.output or {}
-            for key in ("path", "out_path", "output_path"):
-                v = out.get(key)
-                if isinstance(v, str):
-                    seen.add(_normalize(v))
-            for key in ("paths", "files", "outputs"):
-                v = out.get(key)
-                if isinstance(v, list):
-                    for item in v:
-                        if isinstance(item, str):
-                            seen.add(_normalize(item))
+            for att in attachments_for_output(r.output):
+                seen.add(att.path)
     return seen
 
 

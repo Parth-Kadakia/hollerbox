@@ -16,6 +16,7 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sse_starlette.sse import EventSourceResponse
 
+from api._attachments import attachments_for_output
 from api.deps import EngineSurface, get_surface
 from api.schemas import RunDetail, RunRequest, RunSummary, StepRunDetail
 from hollerbox.core.workflow import WorkflowLoadError, load_workflow_from_source
@@ -40,6 +41,9 @@ def _step_detail(row: StepRunRow) -> StepRunDetail:
         attempt=row.attempt,
         started_at=row.started_at,
         finished_at=row.finished_at,
+        attachments=(
+            attachments_for_output(row.output) if row.status == "success" else []
+        ),
     )
 
 

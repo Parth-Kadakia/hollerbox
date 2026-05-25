@@ -53,6 +53,29 @@ class WorkflowValidateResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+# --------------------------- shared: file attachments ---------------------------
+
+class FileAttachment(BaseModel):
+    """A file produced by a step run, surfaced for inline UI rendering.
+
+    `url` is always relative to the API base (e.g. `/files?path=...`),
+    not absolute. `kind` lets the UI render images inline and other
+    files as download links. Used by both `ChatMessage.attachments` and
+    `StepRunDetail.attachments`.
+    """
+
+    kind: Literal["image", "file"]
+    path: str
+    url: str
+    name: str
+    size_bytes: int | None = None
+
+
+# Back-compat alias — `MessageAttachment` was the original name when
+# attachments only lived on chat messages. Keep the type accessible.
+MessageAttachment = FileAttachment
+
+
 # --------------------------- runs / step runs ---------------------------
 
 class StepRunDetail(BaseModel):
@@ -66,6 +89,7 @@ class StepRunDetail(BaseModel):
     attempt: int
     started_at: datetime | None
     finished_at: datetime | None
+    attachments: list[FileAttachment] = Field(default_factory=list)
 
 
 class RunSummary(BaseModel):
@@ -146,21 +170,6 @@ class ConversationCreateRequest(BaseModel):
     title: str = ""
 
 
-class MessageAttachment(BaseModel):
-    """A file produced by a step the chat result references.
-
-    `url` is always relative to the API base (e.g. `/files?path=...`),
-    not absolute. `kind` lets the UI render images inline and other
-    files as download links.
-    """
-
-    kind: Literal["image", "file"]
-    path: str
-    url: str
-    name: str
-    size_bytes: int | None = None
-
-
 class ChatMessage(BaseModel):
     """One persisted message in a conversation."""
 
@@ -171,7 +180,7 @@ class ChatMessage(BaseModel):
     kind: Literal["text", "ack", "approval_request", "result", "error"]
     run_id: str | None
     created_at: datetime
-    attachments: list[MessageAttachment] = Field(default_factory=list)
+    attachments: list[FileAttachment] = Field(default_factory=list)
 
 
 class SendMessageRequest(BaseModel):

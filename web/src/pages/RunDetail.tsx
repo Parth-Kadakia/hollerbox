@@ -8,6 +8,7 @@ import {
   streamRunEvents,
 } from "../api/client";
 import type { RunDetail, RunStatus, StepRunDetail } from "../api/types";
+import Attachment from "../components/Attachment";
 import StatusChip from "../components/StatusChip";
 import { formatDuration, formatTimestamp } from "../lib/format";
 import { ErrorBox } from "./Dashboard";
@@ -227,6 +228,13 @@ function StepCard({ index, step }: { index: number; step: StepRunDetail }) {
         {step.error && (
           <p className="text-red-700">error: {step.error}</p>
         )}
+        {(step.attachments ?? []).length > 0 && (
+          <div className="space-y-2">
+            {(step.attachments ?? []).map((a) => (
+              <Attachment key={a.path} att={a} />
+            ))}
+          </div>
+        )}
         {step.logs.length > 0 && (
           <details>
             <summary className="cursor-pointer text-ink/60 hover:text-ink">
@@ -237,8 +245,8 @@ function StepCard({ index, step }: { index: number; step: StepRunDetail }) {
             </pre>
           </details>
         )}
-        {Object.keys(step.output).length > 0 && (
-          <details>
+        {Object.keys(step.output ?? {}).length > 0 && (
+          <details open>
             <summary className="cursor-pointer text-ink/60 hover:text-ink">
               output
             </summary>

@@ -47,6 +47,8 @@ export interface StepRunDetail {
   attempt: number;
   started_at: string | null;
   finished_at: string | null;
+  /** Optional because older backends won't emit this field over SSE. */
+  attachments?: FileAttachment[];
 }
 
 export interface RunSummary {
@@ -101,7 +103,7 @@ export interface ConversationSummary {
 
 export type MessageKind = "text" | "ack" | "approval_request" | "result" | "error";
 
-export interface MessageAttachment {
+export interface FileAttachment {
   kind: "image" | "file";
   /** Absolute path on the server's filesystem (informational only). */
   path: string;
@@ -111,6 +113,9 @@ export interface MessageAttachment {
   size_bytes: number | null;
 }
 
+/** @deprecated kept for callers that imported the old name. */
+export type MessageAttachment = FileAttachment;
+
 export interface ChatMessage {
   id: string;
   conversation_id: string;
@@ -119,7 +124,8 @@ export interface ChatMessage {
   kind: MessageKind;
   run_id: string | null;
   created_at: string;
-  attachments: MessageAttachment[];
+  /** Optional because older backends won't emit this field over SSE. */
+  attachments?: FileAttachment[];
 }
 
 export interface SendMessageResponse {

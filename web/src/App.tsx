@@ -14,6 +14,8 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Chat />} />
+          <Route path="chat" element={<Chat />} />
+          <Route path="chat/:convId" element={<Chat />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="workflows" element={<Workflows />} />
           <Route path="workflows/new" element={<Editor />} />
