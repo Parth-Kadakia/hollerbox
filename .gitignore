@@ -88,8 +88,11 @@ yarn-error.log*
 .env.local
 .env.*.local
 
-# HollerBox runtime data (per README §10)
+# HollerBox runtime data
 .hollerbox/
 *.sqlite
 *.sqlite3
 *.db
+
+# Local-only files (not for the public repo) — design brief lives here
+.local/

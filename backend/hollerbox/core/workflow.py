@@ -1,6 +1,6 @@
 """Workflow / Step pydantic models + YAML loader.
 
-The YAML format (see docs/BUILD_BRIEF.md §4) is parsed here into typed
+The YAML format is parsed here into typed
 pydantic models. Step-type-specific config is left as a free-form `dict` at
 this layer — the Step class for each `type` validates its own config when
 the Runner instantiates it (Phase 1b).

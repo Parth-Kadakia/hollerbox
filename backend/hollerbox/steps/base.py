@@ -1,7 +1,7 @@
 """Step ABC + StepResult.
 
 Every step implementation in `hollerbox/steps/` subclasses `Step`. The
-contract (from docs/BUILD_BRIEF.md §4) is small on purpose:
+contract is small on purpose:
 
 - declare a `type` (registry key) and a `ConfigModel` (pydantic schema for
   the step's config dict)

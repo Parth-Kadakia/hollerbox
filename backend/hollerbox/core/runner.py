@@ -1,6 +1,6 @@
 """Runner — executes a workflow's steps sequentially with the §5 guarantees.
 
-What the Runner is responsible for (BUILD_BRIEF §5, §9):
+What the Runner is responsible for:
 
 1. **Sequential execution** of `workflow.steps` (DAG executor lands later;
    the runner already operates against an ordered *plan* so swapping is

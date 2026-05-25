@@ -86,8 +86,6 @@ before the next one starts.
 | 7 | Agent step + agent fallback in chat | — |
 | 8 | PWA + push notifications + optional external channels | — |
 
-The full design brief lives in [docs/BUILD_BRIEF.md](docs/BUILD_BRIEF.md).
-
 ## License
 
 MIT — see [LICENSE](LICENSE). Copyright © 2026 Parth Kadakia / Brand Box LLC.
