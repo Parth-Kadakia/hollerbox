@@ -34,7 +34,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     let detail = resp.statusText;
     try {
       const body = await resp.json();
-      detail = body.detail || JSON.stringify(body);
+      const raw = body.detail ?? body;
+      detail =
+        typeof raw === "string" ? raw : JSON.stringify(raw, null, 2);
     } catch {
       // body wasn't JSON — keep the status text
     }

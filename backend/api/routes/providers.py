@@ -22,6 +22,10 @@ class ProviderStatus(BaseModel):
     kind: Literal["text", "image"]
     status: Literal["ready", "missing-sdk", "no-key"]
     detail: str
+    # Filled in for providers that can enumerate locally available models
+    # (Ollama). Empty list for everything else — the API doesn't try to
+    # list remote-hosted models. UI can show this as a dropdown.
+    models: list[str] = []
 
 
 class ProvidersResponse(BaseModel):
@@ -42,17 +46,40 @@ _IMAGE_PROVIDERS: list[tuple[str, str]] = [
 ]
 
 
+def _ollama_models(registered: dict, name: str) -> list[str]:
+    """Best-effort enumerate of installed Ollama models."""
+    p = registered.get(name)
+    list_models = getattr(p, "list_models", None)
+    if callable(list_models):
+        try:
+            return list(list_models())
+        except Exception:  # noqa: BLE001 — listing is best-effort
+            return []
+    return []
+
+
 def _row(
     registered: dict, secret_store, name: str, key_name: str | None, *, kind: str
 ) -> ProviderStatus:
     # No-key providers (mock, ollama) are always ready when registered.
     if key_name is None and name in registered:
         host = getattr(registered[name], "_host", None)
+        models = _ollama_models(registered, name) if name == "ollama" else []
+        if name == "ollama" and not models:
+            # Reachable host but no models installed — surface clearly.
+            return ProviderStatus(
+                name=name,
+                kind=kind,  # type: ignore[arg-type]
+                status="ready",
+                detail=f"host={host} · no models pulled — try `ollama pull llama3.1`",
+                models=[],
+            )
         return ProviderStatus(
             name=name,
             kind=kind,  # type: ignore[arg-type]
             status="ready",
             detail=f"host={host}" if host else "",
+            models=models,
         )
     if name in registered:
         return ProviderStatus(

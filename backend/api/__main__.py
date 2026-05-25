@@ -10,7 +10,11 @@ def main() -> None:
 
     host = os.environ.get("HOLLERBOX_API_HOST", "127.0.0.1")
     port = int(os.environ.get("HOLLERBOX_API_PORT", "8787"))
-    uvicorn.run("api.main:app", host=host, port=port, reload=False)
+    # Dev-friendly default: reload on backend file save so users don't end
+    # up staring at "extra_forbidden" errors when they pull new code and
+    # forget to restart. Flip with `HOLLERBOX_API_RELOAD=0` for prod.
+    reload = os.environ.get("HOLLERBOX_API_RELOAD", "1") != "0"
+    uvicorn.run("api.main:app", host=host, port=port, reload=reload)
 
 
 if __name__ == "__main__":

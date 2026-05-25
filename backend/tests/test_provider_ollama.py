@@ -17,8 +17,19 @@ def restore_transport():
     OllamaProvider._TRANSPORT = original
 
 
-def _set_transport(handler):
-    OllamaProvider._TRANSPORT = httpx.MockTransport(handler)
+def _set_transport(handler, *, installed: list[str] | None = None):
+    """Mount a MockTransport that routes `/api/generate` to `handler` and
+    answers `/api/tags` with the (optional) installed-models list."""
+    tags_payload = {
+        "models": [{"name": n} for n in (installed if installed is not None else [DEFAULT_MODEL])]
+    }
+
+    def dispatch(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/tags":
+            return httpx.Response(200, json=tags_payload)
+        return handler(request)
+
+    OllamaProvider._TRANSPORT = httpx.MockTransport(dispatch)
 
 
 def test_basic_generate_success():
@@ -119,3 +130,85 @@ def test_temperature_omitted_when_unspecified():
 
 def test_provider_name():
     assert OllamaProvider().name == "ollama"
+
+
+def test_default_model_falls_back_to_first_installed_when_default_missing():
+    """User has qwen + granite installed but not llama3.1 → use the first one."""
+    captured = {}
+
+    def handler(request):
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"response": "ok"})
+
+    _set_transport(handler, installed=["qwen3.5:0.8b", "granite4.1:3b"])
+    OllamaProvider().complete(prompt="hi")
+    # Sort is alphabetic — granite4.1:3b wins
+    assert captured["body"]["model"] == "granite4.1:3b"
+
+
+def test_default_model_matches_by_base_name_when_tag_differs():
+    """`llama3.1` (default) matches `llama3.1:latest` installed."""
+    captured = {}
+
+    def handler(request):
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"response": "ok"})
+
+    _set_transport(handler, installed=["llama3.1:latest", "qwen3.5:0.8b"])
+    OllamaProvider().complete(prompt="hi")
+    assert captured["body"]["model"] == "llama3.1:latest"
+
+
+def test_default_falls_back_to_configured_when_tags_unreachable():
+    """If /api/tags errors out, we still send a request with the configured default."""
+    captured = {}
+
+    def handler(request):
+        if request.url.path == "/api/tags":
+            return httpx.Response(500, text="boom")
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"response": "ok"})
+
+    OllamaProvider._TRANSPORT = httpx.MockTransport(handler)
+    OllamaProvider().complete(prompt="hi")
+    assert captured["body"]["model"] == DEFAULT_MODEL
+
+
+def test_list_models_returns_installed_names():
+    OllamaProvider._TRANSPORT = httpx.MockTransport(
+        lambda req: httpx.Response(
+            200, json={"models": [{"name": "qwen3.5:0.8b"}, {"name": "granite4.1:3b"}]}
+        )
+    )
+    assert OllamaProvider().list_models() == ["granite4.1:3b", "qwen3.5:0.8b"]
+
+
+def test_list_models_caches_result():
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.path)
+        return httpx.Response(200, json={"models": [{"name": "x:1"}]})
+
+    OllamaProvider._TRANSPORT = httpx.MockTransport(handler)
+    p = OllamaProvider()
+    p.list_models()
+    p.list_models()
+    p.list_models()
+    # Only one /api/tags call.
+    assert calls.count("/api/tags") == 1
+
+
+def test_clear_model_cache_forces_refetch():
+    seen = {"count": 0}
+
+    def handler(req):
+        seen["count"] += 1
+        return httpx.Response(200, json={"models": [{"name": "x:1"}]})
+
+    OllamaProvider._TRANSPORT = httpx.MockTransport(handler)
+    p = OllamaProvider()
+    p.list_models()
+    p.clear_model_cache()
+    p.list_models()
+    assert seen["count"] == 2

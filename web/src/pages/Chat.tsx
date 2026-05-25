@@ -334,11 +334,21 @@ function ModelPicker({
   model: string;
   setModel: (m: string) => void;
 }) {
+  const selected = providers.find((p) => p.name === provider);
+  // When we have an enumerated model list (Ollama), render a select so the
+  // user picks from what's actually installed. Otherwise a freeform input
+  // so they can pin any model id the hosted provider supports.
+  const knownModels = selected?.models ?? [];
   return (
     <div className="flex items-center gap-1.5 text-xs">
       <select
         value={provider}
-        onChange={(e) => setProvider(e.target.value)}
+        onChange={(e) => {
+          setProvider(e.target.value);
+          // Reset the model when switching providers — model ids don't
+          // cross provider lines.
+          setModel("");
+        }}
         title="Provider for the chat router"
         className="rounded-md border border-ink/15 bg-white/50 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-terracotta/40"
       >
@@ -349,13 +359,29 @@ function ModelPicker({
           </option>
         ))}
       </select>
-      <input
-        value={model}
-        onChange={(e) => setModel(e.target.value)}
-        placeholder="default model"
-        title="Optional model id; leave blank for the provider's default"
-        className="w-32 rounded-md border border-ink/15 bg-white/50 px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-2 focus:ring-terracotta/40"
-      />
+      {knownModels.length > 0 ? (
+        <select
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          title="Model — populated from the provider's local install"
+          className="rounded-md border border-ink/15 bg-white/50 px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-2 focus:ring-terracotta/40"
+        >
+          <option value="">default ({knownModels[0]})</option>
+          {knownModels.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          placeholder="default model"
+          title="Optional model id; leave blank for the provider's default"
+          className="w-32 rounded-md border border-ink/15 bg-white/50 px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-2 focus:ring-terracotta/40"
+        />
+      )}
     </div>
   );
 }

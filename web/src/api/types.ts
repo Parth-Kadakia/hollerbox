@@ -85,6 +85,8 @@ export interface ProviderStatus {
   kind: "text" | "image";
   status: "ready" | "missing-sdk" | "no-key";
   detail: string;
+  /** Locally-enumerable model ids (Ollama). Empty for hosted providers. */
+  models?: string[];
 }
 
 export interface ProvidersResponse {

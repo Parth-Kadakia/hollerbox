@@ -34,6 +34,68 @@ class OllamaProvider(Provider):
         self._host = host.rstrip("/")
         self._default_model = default_model
         self._timeout = timeout
+        # Cached so we don't hit /api/tags on every completion. Cleared
+        # via `clear_model_cache()` if the user pulls a new model and
+        # wants it picked up without a restart.
+        self._installed_models: list[str] | None = None
+
+    def _client(self) -> httpx.Client:
+        kwargs: dict = {"timeout": self._timeout}
+        t = type(self)._TRANSPORT
+        if t is not None:
+            kwargs["transport"] = t
+        return httpx.Client(**kwargs)
+
+    def list_models(self, *, force_refresh: bool = False) -> list[str]:
+        """Return the names of models pulled in the local Ollama instance.
+
+        Result is cached after the first successful call. Returns an empty
+        list if Ollama isn't reachable, the response is malformed, or any
+        other failure — `complete()` will then fall back to the configured
+        default and let Ollama itself surface the clearest error.
+        """
+        if self._installed_models is not None and not force_refresh:
+            return self._installed_models
+        try:
+            with self._client() as client:
+                resp = client.get(f"{self._host}/api/tags")
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception:  # noqa: BLE001 — listing is best-effort
+            return []
+        try:
+            names = [
+                m.get("name")
+                for m in data.get("models", [])
+                if isinstance(m.get("name"), str)
+            ]
+        except (AttributeError, TypeError):
+            return []
+        self._installed_models = sorted(names)
+        return self._installed_models
+
+    def clear_model_cache(self) -> None:
+        self._installed_models = None
+
+    def _pick_default_model(self) -> str:
+        """Pick the model used when caller passes `model=None`.
+
+        Preference: the configured `default_model` if it's installed,
+        otherwise the first model `/api/tags` reports, otherwise the
+        configured default (which will 404 — but the error from Ollama
+        is clearer than a silent fallback).
+        """
+        installed = self.list_models()
+        if not installed:
+            return self._default_model
+        if self._default_model in installed:
+            return self._default_model
+        # Strip ":tag" suffix when matching so "llama3.1" matches "llama3.1:latest"
+        base = self._default_model.split(":", 1)[0]
+        for m in installed:
+            if m.split(":", 1)[0] == base:
+                return m
+        return installed[0]
 
     def complete(
         self,
@@ -44,7 +106,7 @@ class OllamaProvider(Provider):
         temperature: float | None = None,
         max_tokens: int = 1024,
     ) -> Completion:
-        effective_model = model or self._default_model
+        effective_model = model or self._pick_default_model()
         options: dict = {"num_predict": max_tokens}
         if temperature is not None:
             options["temperature"] = temperature
@@ -57,12 +119,7 @@ class OllamaProvider(Provider):
         if system:
             payload["system"] = system
 
-        client_kwargs: dict = {"timeout": self._timeout}
-        transport = type(self)._TRANSPORT
-        if transport is not None:
-            client_kwargs["transport"] = transport
-
-        with httpx.Client(**client_kwargs) as client:
+        with self._client() as client:
             response = client.post(f"{self._host}/api/generate", json=payload)
             response.raise_for_status()
             data = response.json()
