@@ -8,6 +8,7 @@ future API layer (Phase 3) will wrap.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from datetime import datetime
@@ -54,7 +55,37 @@ def _resolved_db_url() -> str:
 def _build_runner() -> Runner:
     sf = _build_session_factory()
     secret_store = SecretStore(sf, key_path=_resolved_key_path())
-    return Runner(sf, secret_store=secret_store)
+    providers = _auto_providers(secret_store)
+    return Runner(sf, secret_store=secret_store, providers=providers)
+
+
+def _auto_providers(secret_store: SecretStore) -> dict:
+    """Instantiate every provider that has its prerequisites satisfied.
+
+    - `ollama` is always registered (instantiation costs nothing; calls fail
+      only if Ollama isn't running, which is the right time to surface it).
+    - `anthropic` registered iff the ANTHROPIC_API_KEY secret is set AND
+      the `anthropic` SDK is importable. Same shape for `openai`.
+    """
+    from hollerbox.providers import (
+        AnthropicProvider,
+        MockProvider,
+        OllamaProvider,
+        OpenAIProvider,
+    )
+
+    out: dict = {"mock": MockProvider(), "ollama": OllamaProvider()}
+
+    # SDK missing is fine here — `providers list` surfaces it for the user.
+    if secret_store.has("ANTHROPIC_API_KEY"):
+        with contextlib.suppress(ImportError):
+            out["anthropic"] = AnthropicProvider(secret_store.get("ANTHROPIC_API_KEY") or "")
+
+    if secret_store.has("OPENAI_API_KEY"):
+        with contextlib.suppress(ImportError):
+            out["openai"] = OpenAIProvider(secret_store.get("OPENAI_API_KEY") or "")
+
+    return out
 
 
 def _build_session_factory():
@@ -443,6 +474,51 @@ def reject(run_id: str) -> None:
     runner, full_id, wf = _resolve_and_load(run_id)
     result = runner.resume(wf, run_id=full_id, approved=False)
     _echo_result(result)
+
+
+# --------------------------- providers group ---------------------------
+
+@main.group()
+def providers() -> None:
+    """Inspect which LLM providers are wired up for `hollerbox run`."""
+
+
+@providers.command("list")
+def providers_list() -> None:
+    """List active providers (with the model each will default to)."""
+    secret_store = _build_secret_store()
+    registered = _auto_providers(secret_store)
+
+    rows: list[tuple[str, str, str]] = []
+    # Always-on
+    rows.append(("mock", "ready", "(deterministic test responses)"))
+    rows.append(("ollama", "ready", _ollama_summary(registered)))
+
+    # SDK-gated
+    rows.append(("anthropic", *_provider_row(registered, secret_store, "anthropic", "ANTHROPIC_API_KEY")))
+    rows.append(("openai", *_provider_row(registered, secret_store, "openai", "OPENAI_API_KEY")))
+
+    width = max(len(r[0]) for r in rows)
+    for name, status, detail in rows:
+        color = "green" if status == "ready" else ("yellow" if status == "missing-sdk" else "bright_black")
+        click.echo(f"  {name.ljust(width)}  {click.style(status, fg=color)}  {detail}")
+
+
+def _ollama_summary(registered: dict) -> str:
+    p = registered.get("ollama")
+    host = getattr(p, "_host", "?") if p else "?"
+    return f"host={host}"
+
+
+def _provider_row(registered: dict, secret_store: SecretStore, name: str, key_name: str) -> tuple[str, str]:
+    if name in registered:
+        return "ready", f"secret={key_name}"
+    if secret_store.has(key_name):
+        return (
+            "missing-sdk",
+            f"secret={key_name} set; install with `uv sync --extra llm` to enable",
+        )
+    return "no-key", f"set with: hollerbox secret set {key_name}"
 
 
 # --------------------------- secret group ---------------------------

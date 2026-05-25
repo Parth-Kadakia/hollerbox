@@ -1,0 +1,48 @@
+# LLM example: summarize a chunk of text and optionally save the result.
+#
+# Prerequisites (one-time):
+#   hollerbox secret set ANTHROPIC_API_KEY    # paste your key when prompted
+#   uv sync --extra llm                       # installs the anthropic SDK
+#
+# Run:
+#   hollerbox run workflows/examples/summarize_text.yaml \
+#     --input text="$(cat path/to/article.md)" \
+#     --input out_path=/tmp/summary.md
+#
+# The `save` step is destructive + gated by requires_confirmation, so
+# the run will pause and ask you to `hollerbox approve <run-id>`.
+name: summarize_text
+version: 1
+description: Summarize the provided text via an LLM and save the result.
+chat_examples:
+  - "summarize this article"
+inputs:
+  text: "Paste your text here, or pass --input text='...'"
+  out_path: "/tmp/hollerbox-summary.md"
+  provider: "anthropic"
+steps:
+  - id: summarize
+    type: llm
+    config:
+      provider: "${inputs.provider}"
+      system: "You are a concise editor. Reply with bullet points only."
+      prompt: |
+        Summarize the following text into 5 bullet points:
+
+        ${inputs.text}
+      temperature: 0.2
+      max_tokens: 800
+
+  - id: save
+    type: write_file
+    requires_confirmation: true
+    config:
+      path: "${inputs.out_path}"
+      content: |
+        # Summary
+
+        Generated: ${run.timestamp}
+        Provider: ${steps.summarize.output.provider}
+        Model: ${steps.summarize.output.model}
+
+        ${steps.summarize.output.text}

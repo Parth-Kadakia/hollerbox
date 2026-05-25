@@ -114,6 +114,7 @@ class Runner:
             secrets=self._merge_secrets(secrets),
             settings=settings,
             run_id=run_id,
+            providers=self._providers,
         )
 
         with session_scope(self._sf) as session:
@@ -200,6 +201,7 @@ class Runner:
             settings=dict(snapshot.get("settings") or {}),
             run=dict(snapshot.get("run") or {"id": run_id}),
             steps=dict(snapshot.get("steps") or {}),
+            providers=dict(self._providers),
         )
         # Pending step has a recorded `pending_approval` entry in ctx.steps —
         # remove it so the resume cleanly re-records the real attempt.

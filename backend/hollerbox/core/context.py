@@ -10,10 +10,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from hollerbox.core import templating
 from hollerbox.core.templating import ResolverScope
+
+if TYPE_CHECKING:
+    from hollerbox.providers.base import Provider
 
 
 @dataclass
@@ -23,6 +26,7 @@ class RunContext:
     settings: dict[str, Any] = field(default_factory=dict)
     run: dict[str, Any] = field(default_factory=dict)
     steps: dict[str, dict[str, Any]] = field(default_factory=dict)
+    providers: dict[str, Provider] = field(default_factory=dict)
 
     @classmethod
     def new(
@@ -32,6 +36,7 @@ class RunContext:
         secrets: dict[str, Any] | None = None,
         settings: dict[str, Any] | None = None,
         run_id: str | None = None,
+        providers: dict[str, Provider] | None = None,
     ) -> RunContext:
         now = datetime.now(UTC)
         run = {
@@ -44,6 +49,7 @@ class RunContext:
             secrets=dict(secrets or {}),
             settings=dict(settings or {}),
             run=run,
+            providers=dict(providers or {}),
         )
 
     def _scope(self) -> ResolverScope:

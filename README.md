@@ -11,7 +11,7 @@
 
 ---
 
-> **Status:** Phase 1 complete — the engine runs YAML workflows end-to-end with dry-run, approval pauses, retry policy, and full persistence. Web UI, chat, scheduling, and LLM providers are still ahead. See [Roadmap](#roadmap) for what's coming.
+> **Status:** Phase 2 complete — engine + CLI run YAML workflows end-to-end with dry-run, approval pauses, retry, persistence, an encrypted secret store, and an `llm` step that drives Anthropic / OpenAI / Ollama (plus a deterministic `mock` for tests). HTTP API, web UI, chat, and scheduling are still ahead. See [Roadmap](#roadmap).
 
 ## What is it?
 
@@ -41,13 +41,18 @@ cd hollerbox
 cd backend
 uv sync --extra dev
 uv run hollerbox --help
-uv run pytest          # 145 tests, all green
+uv run pytest          # 194 tests, all green
 
 # Try a workflow
 uv run hollerbox validate ../workflows/hello.yaml
 uv run hollerbox run ../workflows/hello.yaml --input who=you
 uv run hollerbox runs
 uv run hollerbox run-detail <run-id-prefix>
+
+# Want LLM steps? Install the SDKs and set a key, then check what's wired:
+uv sync --extra dev --extra llm
+uv run hollerbox secret set ANTHROPIC_API_KEY
+uv run hollerbox providers list
 
 # Web
 cd ../web
@@ -78,8 +83,8 @@ before the next one starts.
 |---|---|---|
 | 0 | Repo scaffold, package installs, web shell boots | ✅ |
 | 1 | Core engine: YAML workflows, 5 step types, dry-run + approvals + retry, SQLite persistence, CLI | ✅ |
-| 2 | LLM providers (Anthropic, OpenAI, Ollama) + encrypted secret store | ⏳ |
-| 3 | HTTP API + SSE for live run traces | — |
+| 2 | LLM providers (Anthropic, OpenAI, Ollama) + `llm` step + encrypted secret store + `secret` / `providers` CLI | ✅ |
+| 3 | HTTP API + SSE for live run traces | ⏳ |
 | 4 | Web UI: dashboard, YAML editor, run trace, approvals | — |
 | 5 | Conversational chat interface (the primary UX) | — |
 | 6 | Scheduling (cron + interval) | — |
