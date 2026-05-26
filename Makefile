@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help setup test backend-test web-test dev backend-dev web-dev api app ci ruff clean
+.PHONY: help setup test backend-test web-test dev backend-dev web-dev api app app-run app-build ci ruff clean
 
 help:
 	@echo "HollerBox dev commands:"
@@ -14,6 +14,8 @@ help:
 	@echo "  make api           Start the HTTP API on http://127.0.0.1:8787"
 	@echo "  make dev           Start the web dev server (http://127.0.0.1:5173)"
 	@echo "  make app           Build the web UI + start API serving everything on http://127.0.0.1:8787"
+	@echo "  make app-run       Run the macOS menu-bar launcher in dev mode (no PyInstaller bundle)"
+	@echo "  make app-build     Build HollerBox.app via PyInstaller (output in app/dist/)"
 	@echo "  make clean         Remove caches, .venv, node_modules, build artifacts"
 	@echo ""
 	@echo "  (For the engine CLI itself, use 'cd backend && uv run hollerbox ...')"
@@ -38,6 +40,16 @@ api:
 app:
 	@cd web && npm run build
 	@cd backend && HOLLERBOX_API_RELOAD=0 uv run hollerbox-api
+
+app-run:
+	@cd web && npm run build
+	@cd app && uv run hollerbox-launcher
+
+app-build:
+	@cd web && npm run build
+	@cd app && uv sync --extra build
+	@cd app && uv run pyinstaller HollerBox.spec --clean --noconfirm
+	@echo "Built: $(CURDIR)/app/dist/HollerBox.app"
 
 dev:
 	@cd web && npm run dev

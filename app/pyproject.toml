@@ -1,0 +1,20 @@
+[project]
+name = "hollerbox-launcher"
+version = "0.0.1"
+description = "macOS menu-bar launcher for HollerBox."
+requires-python = ">=3.11"
+dependencies = [
+    "hollerbox[api,llm]",
+    "rumps>=0.4.0; sys_platform == 'darwin'",
+]
+
+[project.optional-dependencies]
+build = [
+    "pyinstaller>=6.0",
+]
+
+[project.scripts]
+hollerbox-launcher = "launcher:main"
+
+[tool.uv.sources]
+hollerbox = { path = "../backend" }

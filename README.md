@@ -35,6 +35,7 @@
 - [A workflow looks like this](#a-workflow-looks-like-this)
 - [Architecture](#architecture)
 - [Install](#install)
+- [Native macOS launcher (menu bar app)](#native-macos-launcher-menu-bar-app)
 - [CLI reference](#cli-reference)
 - [Remote access](#remote-access)
 - [HTTP API](#http-api)
@@ -352,6 +353,35 @@ npm run dev
 Environment overrides:
 - `HOLLERBOX_DB_URL` — SQLite URL (default `sqlite:///~/.hollerbox/hollerbox.sqlite`)
 - `HOLLERBOX_KEY_PATH` — Fernet key file (default `~/.hollerbox/key`)
+
+## Native macOS launcher (menu bar app)
+
+For an Ollama-style "live in the menu bar" experience, the `app/`
+folder ships a `rumps`-based launcher that:
+
+1. Generates a stable API token (one per install, stored at
+   `~/.hollerbox/launcher_token`, 0600).
+2. Boots `hollerbox-api` as a subprocess.
+3. Opens the browser to the local URL with the token already in the
+   query string — no copy/paste needed on first launch.
+4. Shows a menu bar item with **Open HollerBox**, **Copy server
+   token**, **Reveal data folder**, **Show logs**, **Quit**.
+
+Two ways to use it:
+
+```bash
+# Dev mode — runs the launcher from source. Quickest to iterate on.
+make app-run
+
+# Production bundle — builds HollerBox.app via PyInstaller.
+# Output: app/dist/HollerBox.app, drag into /Applications.
+make app-build
+```
+
+The PyInstaller bundle is unsigned. For personal use you can run
+`xattr -d com.apple.quarantine app/dist/HollerBox.app` to bypass
+Gatekeeper. Notarization for redistribution needs an Apple developer
+account and is out of scope for the open-source build.
 
 ## Remote access
 
