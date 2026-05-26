@@ -216,6 +216,62 @@ def test_provider_override_routes_through_chosen_provider(api_client, api_surfac
     assert len(b.calls) == 1
 
 
+def test_attachment_paths_become_user_message_attachments(
+    api_client, api_surface, tmp_path, monkeypatch
+) -> None:
+    """Upload a file, send a chat message attaching it — the user message
+    should carry the file as an attachment and the visible content should
+    NOT include the [attached: ...] marker."""
+    monkeypatch.setenv("HOLLERBOX_DATA_DIR", str(tmp_path))
+    up = api_client.post(
+        "/files/upload",
+        files={"file": ("notes.txt", b"hi", "text/plain")},
+    ).json()
+
+    _script(api_surface, {"action": "chitchat", "text": "got it"})
+    cid = _create_conv(api_client)
+    resp = api_client.post(
+        f"/conversations/{cid}/messages",
+        json={"content": "look at this", "attachment_paths": [up["path"]]},
+    )
+    assert resp.status_code == 200
+    msgs = resp.json()["messages"]
+    user_msg = msgs[0]
+    assert user_msg["role"] == "user"
+    # Marker is stripped from the visible body.
+    assert "[attached" not in user_msg["content"]
+    assert user_msg["content"] == "look at this"
+    # The file shows up as an attachment.
+    assert len(user_msg["attachments"]) == 1
+    assert user_msg["attachments"][0]["name"] == "notes.txt"
+
+
+def test_router_sees_attached_paths_in_prompt(
+    api_client, api_surface, tmp_path, monkeypatch
+) -> None:
+    """The router LLM call must include the attached path in the prompt
+    so it can hand it to a workflow."""
+    monkeypatch.setenv("HOLLERBOX_DATA_DIR", str(tmp_path))
+    up = api_client.post(
+        "/files/upload",
+        files={"file": ("doc.pdf", b"%PDF-", "application/pdf")},
+    ).json()
+
+    from hollerbox.providers import MockProvider
+
+    mock = MockProvider(default_text=json.dumps({"action": "chitchat", "text": "ok"}))
+    api_surface.providers["mock"] = mock
+
+    cid = _create_conv(api_client)
+    api_client.post(
+        f"/conversations/{cid}/messages",
+        json={"content": "summarize this", "attachment_paths": [up["path"]]},
+    )
+    last_prompt = mock.calls[-1]["prompt"]
+    assert "attached" in last_prompt
+    assert up["path"] in last_prompt
+
+
 def test_model_override_is_passed_to_provider(api_client, api_surface) -> None:
     from hollerbox.providers import MockProvider
 

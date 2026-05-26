@@ -84,8 +84,28 @@ class ConversationSession:
             row = repo.create_conversation(s, title=title)
             return row.id
 
-    def post_user_message(self, conv_id: str, text: str) -> TurnResult:
-        """Record a user message and produce one or more assistant replies."""
+    def post_user_message(
+        self,
+        conv_id: str,
+        text: str,
+        *,
+        attachment_paths: list[str] | None = None,
+    ) -> TurnResult:
+        """Record a user message and produce one or more assistant replies.
+
+        `attachment_paths` (absolute paths inside the uploads sandbox) are
+        appended to the persisted content as `[attached: ...]` lines so
+        the router LLM sees them in context. The same lines are parsed
+        back out at render time into `ChatMessage.attachments`.
+        """
+        # Build the persisted body. Trailing attachment lines are a
+        # machine-readable contract — keep the format stable.
+        attachments = [p for p in (attachment_paths or []) if p]
+        full_content = text
+        if attachments:
+            tail = "\n\n" + "\n".join(f"[attached: {p}]" for p in attachments)
+            full_content = full_content + tail
+
         # 1. Record the user message
         with session_scope(self._sf) as s:
             conv = repo.get_conversation(s, conv_id)
@@ -95,12 +115,13 @@ class ConversationSession:
                 s,
                 conversation_id=conv_id,
                 role="user",
-                content=text,
+                content=full_content,
                 kind="text",
             )
             user_msg_id = user_msg.id
 
         # 2. If there's a paused run for this conversation, interpret as approval
+        #    Use the bare text (without attachment markers) for the yes/no match.
         decision_handled = self._maybe_handle_approval(conv_id, text)
         if decision_handled is not None:
             return TurnResult(
@@ -108,8 +129,9 @@ class ConversationSession:
                 assistant_message_ids=decision_handled,
             )
 
-        # 3. Otherwise, route the message
-        assistant_ids = self._route_and_respond(conv_id, text)
+        # 3. Otherwise, route the message. The router sees full_content so
+        #    it knows about the attachments and can hand them to workflows.
+        assistant_ids = self._route_and_respond(conv_id, full_content)
         return TurnResult(user_message_id=user_msg_id, assistant_message_ids=assistant_ids)
 
     def list_messages(self, conv_id: str) -> Sequence[MessageRow]:

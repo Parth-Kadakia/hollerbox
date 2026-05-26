@@ -53,3 +53,59 @@ def test_404_when_recorded_path_missing(api_client, api_surface, tmp_path: Path)
 
     resp = api_client.get("/files", params={"path": str(target)})
     assert resp.status_code == 404
+
+
+# --------------------------- uploads ---------------------------
+
+def test_upload_writes_file_and_returns_path(api_client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOLLERBOX_DATA_DIR", str(tmp_path))
+    payload = b"hello uploaded content"
+    resp = api_client.post(
+        "/files/upload",
+        files={"file": ("notes.txt", payload, "text/plain")},
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["name"] == "notes.txt"
+    assert body["size_bytes"] == len(payload)
+    assert body["url"].startswith("/files?path=")
+    written = Path(body["path"])
+    assert written.exists()
+    assert written.read_bytes() == payload
+
+
+def test_uploaded_file_can_be_fetched_through_files(api_client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOLLERBOX_DATA_DIR", str(tmp_path))
+    payload = b"second upload"
+    up = api_client.post(
+        "/files/upload",
+        files={"file": ("z.bin", payload, "application/octet-stream")},
+    ).json()
+
+    resp = api_client.get("/files", params={"path": up["path"]})
+    assert resp.status_code == 200
+    assert resp.content == payload
+
+
+def test_upload_strips_path_traversal_in_filename(api_client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOLLERBOX_DATA_DIR", str(tmp_path))
+    resp = api_client.post(
+        "/files/upload",
+        files={"file": ("../../etc/passwd", b"x", "text/plain")},
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    # Only the basename should survive — no traversal escape.
+    assert body["name"] == "passwd"
+    assert "/etc/" not in body["path"]
+
+
+def test_upload_size_limit(api_client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOLLERBOX_DATA_DIR", str(tmp_path))
+    # 26 MB > the 25 MB cap.
+    big = b"a" * (26 * 1024 * 1024)
+    resp = api_client.post(
+        "/files/upload",
+        files={"file": ("big.bin", big, "application/octet-stream")},
+    )
+    assert resp.status_code == 413

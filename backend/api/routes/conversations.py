@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -112,6 +113,20 @@ def _attachments_for_run(surface: EngineSurface, run_id: str) -> list[FileAttach
     return out
 
 
+_ATTACHED_RE = re.compile(r"^\[attached:\s*(.+?)\s*\]\s*$", re.MULTILINE)
+
+
+def _split_user_attachments(content: str) -> tuple[str, list[FileAttachment]]:
+    """Return (visible_text, attachments) for a user message body that may
+    contain `[attached: /abs/path]` markers added by post_user_message.
+    """
+    paths = _ATTACHED_RE.findall(content)
+    if not paths:
+        return content, []
+    visible = _ATTACHED_RE.sub("", content).rstrip()
+    return visible, attachments_for_output({"paths": paths})
+
+
 def _build_messages(
     surface: EngineSurface, conv_id: str
 ) -> list[ChatMessage]:
@@ -122,9 +137,17 @@ def _build_messages(
     out: list[ChatMessage] = []
     for row in rows:
         atts: list[FileAttachment] = []
-        if row.run_id and row.kind == "result":
+        content = row.content
+        if row.role == "user":
+            content, atts = _split_user_attachments(row.content)
+        elif row.run_id and row.kind == "result":
             atts = cache.setdefault(row.run_id, _attachments_for_run(surface, row.run_id))
-        out.append(_msg_to_schema(row, attachments=atts))
+        # Rebuild ChatMessage with the cleaned content so the UI doesn't
+        # show the raw `[attached: ...]` lines.
+        schema = _msg_to_schema(row, attachments=atts)
+        if content != row.content:
+            schema = schema.model_copy(update={"content": content})
+        out.append(schema)
     return out
 
 
@@ -217,7 +240,9 @@ def send_message(
 ) -> SendMessageResponse:
     session = _build_session(surface, provider_name=body.provider, model=body.model)
     try:
-        turn = session.post_user_message(conv_id, body.content)
+        turn = session.post_user_message(
+            conv_id, body.content, attachment_paths=body.attachment_paths
+        )
     except ValueError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 — surface provider failures as 502s

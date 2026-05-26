@@ -188,12 +188,18 @@ class SendMessageRequest(BaseModel):
 
     `provider` / `model` override the router's default LLM picks just for
     this turn — useful when the chat UI lets the user switch on the fly.
+
+    `attachment_paths` references uploads the user already pushed via
+    `POST /files/upload`. The session encodes them into the message so
+    the router LLM knows about them and downstream workflows can use the
+    paths as inputs.
     """
 
     model_config = ConfigDict(extra="forbid")
     content: str = Field(min_length=1)
     provider: str | None = None
     model: str | None = None
+    attachment_paths: list[str] = Field(default_factory=list)
 
 
 class SendMessageResponse(BaseModel):

@@ -10,6 +10,8 @@ import {
   rejectRun,
   sendMessage,
   streamConversationEvents,
+  uploadFile,
+  type UploadResponse,
 } from "../api/client";
 import type {
   ChatMessage,
@@ -38,7 +40,26 @@ export default function ChatPage() {
   const [model, setModel] = useState<string>(
     () => localStorage.getItem(MODEL_PREF_KEY) ?? "",
   );
+  const [pending, setPending] = useState<UploadResponse[]>([]);
+  const [uploading, setUploading] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handlePickedFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-pick of the same file
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const up = await uploadFile(file);
+      setPending((prev) => [...prev, up]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+    }
+  }
 
   useEffect(() => {
     listProviders()
@@ -157,15 +178,23 @@ export default function ChatPage() {
   useEffect(() => () => streamRef.current?.close(), []);
 
   async function send() {
-    if (!convId || !input.trim() || busy) return;
+    if (!convId || busy) return;
+    const text = input.trim();
+    const hasAttachments = pending.length > 0;
+    // Allow a "files only" send by defaulting to a short prompt when the
+    // user hits Enter after attaching without typing.
+    if (!text && !hasAttachments) return;
     setBusy(true);
     setError(null);
-    const text = input;
+    const payload = text || (hasAttachments ? "analyze the attached file" : "");
+    const paths = pending.map((p) => p.path);
     setInput("");
+    setPending([]);
     try {
-      const resp = await sendMessage(convId, text, {
+      const resp = await sendMessage(convId, payload, {
         provider: provider || undefined,
         model: model || undefined,
+        attachmentPaths: paths.length > 0 ? paths : undefined,
       });
       setMessages(resp.messages);
       openStream(convId);
@@ -336,22 +365,70 @@ export default function ChatPage() {
             e.preventDefault();
             void send();
           }}
-          className="border-t border-ink/10 pt-3 flex gap-2"
+          className="border-t border-ink/10 pt-3 space-y-2"
         >
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={convId ? "Message…" : "starting conversation…"}
-            disabled={!convId || busy}
-            className="flex-1 rounded-md border border-ink/15 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-terracotta/40"
-          />
-          <button
-            type="submit"
-            disabled={!convId || busy || !input.trim()}
-            className="rounded-md bg-terracotta px-4 py-2 text-sm font-medium text-white hover:bg-terracotta/90 disabled:opacity-40"
-          >
-            Send
-          </button>
+          {pending.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {pending.map((p) => (
+                <span
+                  key={p.path}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-ink/15 bg-ink/[0.03] px-2 py-1 text-xs text-ink"
+                >
+                  📎 {p.name}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPending((prev) => prev.filter((q) => q.path !== p.path))
+                    }
+                    className="text-ink/40 hover:text-red-600"
+                    aria-label={`Remove ${p.name}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              hidden
+              onChange={handlePickedFile}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!convId || uploading}
+              title="Attach a file"
+              aria-label="Attach a file"
+              className="shrink-0 rounded-md border border-ink/15 px-3 py-2 text-sm text-ink/70 hover:bg-ink/5 disabled:opacity-40"
+            >
+              {uploading ? "…" : "📎"}
+            </button>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={
+                convId
+                  ? pending.length > 0
+                    ? "Add a note (optional)…"
+                    : "Message…"
+                  : "starting conversation…"
+              }
+              disabled={!convId || busy}
+              className="flex-1 min-w-0 rounded-md border border-ink/15 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-terracotta/40"
+            />
+            <button
+              type="submit"
+              disabled={
+                !convId || busy || (!input.trim() && pending.length === 0)
+              }
+              className="rounded-md bg-terracotta px-4 py-2 text-sm font-medium text-white hover:bg-terracotta/90 disabled:opacity-40"
+            >
+              Send
+            </button>
+          </div>
         </form>
       </div>
     </div>

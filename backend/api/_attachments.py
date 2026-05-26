@@ -10,10 +10,19 @@ links. The sandbox rule for actually serving these files lives in
 from __future__ import annotations
 
 import mimetypes
+import re
 from pathlib import Path
 from urllib.parse import quote
 
 from api.schemas import FileAttachment
+
+# Match the upload prefix written by routes/files.py: 32 hex chars + "-".
+_UPLOAD_PREFIX_RE = re.compile(r"^[0-9a-f]{32}-")
+
+
+def _display_name(filename: str) -> str:
+    """Strip the upload uuid prefix so the UI shows the original name."""
+    return _UPLOAD_PREFIX_RE.sub("", filename)
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 _PATH_KEYS_SINGLE = ("path", "out_path", "output_path")
@@ -63,7 +72,7 @@ def attachments_for_output(output: dict | None) -> list[FileAttachment]:
                 kind="image" if is_image else "file",
                 path=norm,
                 url=f"/files?path={quote(norm)}",
-                name=p.name,
+                name=_display_name(p.name),
                 size_bytes=size,
             )
         )

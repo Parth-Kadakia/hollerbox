@@ -186,7 +186,7 @@ export function listMessages(convId: string) {
 export function sendMessage(
   convId: string,
   content: string,
-  opts?: { provider?: string; model?: string },
+  opts?: { provider?: string; model?: string; attachmentPaths?: string[] },
 ) {
   return request<SendMessageResponse>(`/conversations/${convId}/messages`, {
     method: "POST",
@@ -194,8 +194,38 @@ export function sendMessage(
       content,
       ...(opts?.provider ? { provider: opts.provider } : {}),
       ...(opts?.model ? { model: opts.model } : {}),
+      ...(opts?.attachmentPaths && opts.attachmentPaths.length > 0
+        ? { attachment_paths: opts.attachmentPaths }
+        : {}),
     }),
   });
+}
+
+export interface UploadResponse {
+  path: string;
+  url: string;
+  name: string;
+  size_bytes: number;
+  content_type: string | null;
+}
+
+export async function uploadFile(file: File): Promise<UploadResponse> {
+  // Multipart upload — can't use the JSON `request` helper.
+  const form = new FormData();
+  form.append("file", file);
+  const resp = await fetch("/api/files/upload", { method: "POST", body: form });
+  if (!resp.ok) {
+    let detail = resp.statusText;
+    try {
+      const body = await resp.json();
+      const raw = body.detail ?? body;
+      detail = typeof raw === "string" ? raw : JSON.stringify(raw, null, 2);
+    } catch {
+      // body wasn't JSON — keep the status text
+    }
+    throw new ApiError(resp.status, detail);
+  }
+  return (await resp.json()) as UploadResponse;
 }
 
 export function streamConversationEvents(
