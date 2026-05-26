@@ -1,5 +1,5 @@
 name: generate_image
-version: 1
+version: 2
 description: Generate an image from a text prompt and save it to disk.
 chat_examples:
   - "draw a sunset over the ocean"
@@ -8,7 +8,7 @@ chat_examples:
 inputs:
   prompt: "a children's book illustration of a fox reading a book"
   provider: "openai"
-  out_path: "/tmp/hollerbox-image.png"
+  out_dir: "/tmp"
 steps:
   - id: render
     type: image
@@ -18,4 +18,6 @@ steps:
       provider: ${inputs.provider}
       prompt: ${inputs.prompt}
       size: "1024x1024"
-      save_to: ${inputs.out_path}
+      # Unique per run so chats don't collide and the browser doesn't
+      # cache a stale copy. ${run.id} is the 32-char hex run id.
+      save_to: ${inputs.out_dir}/hollerbox-${run.id}.png

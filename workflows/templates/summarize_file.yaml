@@ -1,5 +1,5 @@
 name: summarize_file
-version: 1
+version: 2
 description: Read a file the user attached in chat, summarize it via LLM, save the result.
 chat_examples:
   - "summarize the attached file"
@@ -8,7 +8,7 @@ chat_examples:
 inputs:
   file_path: "/tmp/example.txt"
   provider: "anthropic"
-  out_path: "/tmp/hollerbox-summary.md"
+  out_dir: "/tmp"
 steps:
   - id: read
     type: read_file
@@ -33,5 +33,5 @@ steps:
     destructive: true
     requires_confirmation: true
     config:
-      path: ${inputs.out_path}
+      path: ${inputs.out_dir}/hollerbox-summary-${run.id}.md
       content: ${steps.summarize.output.text}

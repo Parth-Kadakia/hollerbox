@@ -43,12 +43,13 @@ def test_bundled_templates_are_auto_registered(importing_client) -> None:
 
 
 def test_existing_workflow_is_not_overwritten(importing_client, api_surface) -> None:
-    """If the user has edited a workflow named the same as a template,
-    we must not clobber their version on next restart."""
-    # First, replace the bundled `generate_image` template with a
-    # user-customized version.
+    """If the user has edited a workflow whose `version:` is at-or-above
+    the bundled template's, we must not clobber it on next restart."""
+    # Match the bundled version so the upgrade-comparison falls through
+    # to "leave it alone".
     custom = (
         "name: generate_image\n"
+        "version: 99\n"
         "description: User's customized version\n"
         "steps:\n"
         "  - id: stub\n"

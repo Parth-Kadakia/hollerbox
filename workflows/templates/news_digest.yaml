@@ -1,5 +1,5 @@
 name: news_digest
-version: 1
+version: 2
 description: Fetch top Hacker News headlines on a topic, summarize, save a digest.
 chat_examples:
   - "give me the news on {topic}"
@@ -8,7 +8,7 @@ chat_examples:
 inputs:
   topic: "AI infrastructure"
   provider: "anthropic"
-  out_path: "/tmp/hollerbox-digest.md"
+  out_dir: "/tmp"
 steps:
   - id: fetch
     type: http
@@ -34,7 +34,7 @@ steps:
     destructive: true
     requires_confirmation: true
     config:
-      path: ${inputs.out_path}
+      path: ${inputs.out_dir}/hollerbox-digest-${run.id}.md
       content: |
         # ${inputs.topic} — ${run.date}
 

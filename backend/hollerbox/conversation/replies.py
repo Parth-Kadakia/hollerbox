@@ -36,6 +36,11 @@ def result_message(run: RunRow, steps: list[StepRunRow]) -> str:
             text = last.output.get("text")
             if isinstance(text, str) and text.strip():
                 return text.strip()
+            # File-producing steps (image, write_file) — the UI renders
+            # the file as an attachment under this bubble, so repeating
+            # the path in the text would be redundant.
+            if last.output.get("path") or last.output.get("paths"):
+                return f"done — `{run.workflow.name}` finished."
             preview = _preview_value(last.output)
             if preview:
                 return f"done — `{run.workflow.name}` finished. {preview}".rstrip()

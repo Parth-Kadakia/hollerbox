@@ -33,23 +33,25 @@ def test_llm_text_output_becomes_the_reply_body_verbatim():
     assert len(msg) > 240  # confirms we removed the old 240-char cap
 
 
-def test_file_output_still_uses_done_finished_phrasing():
+def test_file_output_omits_path_text_when_attachment_will_render():
+    """File-producing steps (image, write_file) just say "done — finished".
+    The UI renders the file as an attachment under the bubble, so
+    repeating the path in the text would be visually redundant."""
     msg = result_message(
         _run("success", name="image_gen"),
         [_step({"paths": ["/tmp/out.png"], "n": 1})],
     )
-    assert msg.startswith("done — `image_gen` finished.")
-    assert "/tmp/out.png" in msg
+    assert msg == "done — `image_gen` finished."
 
 
-def test_empty_text_falls_through_to_preview():
-    """An LLM that returned empty text shouldn't produce a blank chat
-    message — fall back to the file preview if any."""
+def test_empty_text_with_paths_still_finishes_cleanly():
+    """An LLM that returned empty text but produced a file shouldn't show
+    "wrote /tmp/o.txt" — the attachment is below. Just say "done"."""
     msg = result_message(
         _run("success", name="x"),
         [_step({"text": "", "paths": ["/tmp/o.txt"]})],
     )
-    assert "wrote /tmp/o.txt" in msg
+    assert msg == "done — `x` finished."
 
 
 def test_shell_stdout_truncated_at_4k():

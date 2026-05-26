@@ -1,5 +1,5 @@
 name: summarize_url
-version: 1
+version: 2
 description: Fetch a web page, summarize it with an LLM, save the result.
 chat_examples:
   - "summarize this URL"
@@ -7,7 +7,7 @@ chat_examples:
 inputs:
   url: "https://example.com"
   provider: "anthropic"
-  out_path: "/tmp/hollerbox-summary.md"
+  out_dir: "/tmp"
 steps:
   - id: fetch
     type: http
@@ -33,5 +33,5 @@ steps:
     destructive: true
     requires_confirmation: true
     config:
-      path: ${inputs.out_path}
+      path: ${inputs.out_dir}/hollerbox-summary-${run.id}.md
       content: ${steps.summarize.output.text}
