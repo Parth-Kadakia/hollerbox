@@ -43,7 +43,7 @@ app:
 
 app-run:
 	@cd web && npm run build
-	@cd app && uv run hollerbox-launcher
+	@cd app && uv run python launcher.py
 
 app-build:
 	@cd web && npm run build

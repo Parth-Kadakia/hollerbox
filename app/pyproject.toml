@@ -16,5 +16,16 @@ build = [
 [project.scripts]
 hollerbox-launcher = "launcher:main"
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Single-file project: launcher.py is the whole thing.
+[tool.hatch.build.targets.wheel]
+only-include = ["launcher.py"]
+
+[tool.hatch.build.targets.wheel.sources]
+"launcher.py" = "launcher.py"
+
 [tool.uv.sources]
 hollerbox = { path = "../backend" }
