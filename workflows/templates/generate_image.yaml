@@ -1,0 +1,21 @@
+name: generate_image
+version: 1
+description: Generate an image from a text prompt and save it to disk.
+chat_examples:
+  - "draw a sunset over the ocean"
+  - "make an image of a cat astronaut"
+  - "generate an image"
+inputs:
+  prompt: "a children's book illustration of a fox reading a book"
+  provider: "openai"
+  out_path: "/tmp/hollerbox-image.png"
+steps:
+  - id: render
+    type: image
+    destructive: true
+    requires_confirmation: true
+    config:
+      provider: ${inputs.provider}
+      prompt: ${inputs.prompt}
+      size: "1024x1024"
+      save_to: ${inputs.out_path}

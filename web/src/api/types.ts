@@ -36,6 +36,14 @@ export interface WorkflowValidateResponse {
   errors: string[];
 }
 
+export interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  yaml_source: string;
+  step_count: number;
+}
+
 export interface StepRunDetail {
   step_id: string;
   step_type: string;

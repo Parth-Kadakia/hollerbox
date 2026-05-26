@@ -1,0 +1,12 @@
+name: my_workflow
+version: 1
+description: A blank workflow. Edit the steps below.
+chat_examples:
+  - "run my workflow"
+inputs:
+  who: "world"
+steps:
+  - id: greet
+    type: shell
+    config:
+      command: "echo Hello, ${inputs.who}!"

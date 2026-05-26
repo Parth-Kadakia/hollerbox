@@ -1,0 +1,37 @@
+name: summarize_file
+version: 1
+description: Read a file the user attached in chat, summarize it via LLM, save the result.
+chat_examples:
+  - "summarize the attached file"
+  - "summarize this for me"
+  - "analyze the attached file"
+inputs:
+  file_path: "/tmp/example.txt"
+  provider: "anthropic"
+  out_path: "/tmp/hollerbox-summary.md"
+steps:
+  - id: read
+    type: read_file
+    config:
+      path: ${inputs.file_path}
+
+  - id: summarize
+    type: llm
+    config:
+      provider: ${inputs.provider}
+      system: "You are a concise summarizer."
+      prompt: |
+        Summarize the following document in 5 bullets.
+
+        Source: ${inputs.file_path}
+
+        Content:
+        ${steps.read.output.content}
+
+  - id: save
+    type: write_file
+    destructive: true
+    requires_confirmation: true
+    config:
+      path: ${inputs.out_path}
+      content: ${steps.summarize.output.text}

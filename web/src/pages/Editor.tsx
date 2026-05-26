@@ -1,6 +1,6 @@
 import Editor from "@monaco-editor/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   getWorkflow,
   upsertWorkflow,
@@ -24,9 +24,14 @@ steps:
 export default function EditorPage() {
   const { name } = useParams<{ name: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const isNew = !name;
+  // When the Workflows page sends us here via "Use template", the seed
+  // YAML rides on location.state.
+  const seedYaml =
+    (location.state as { initialYaml?: string } | null)?.initialYaml ?? null;
 
-  const [yamlText, setYamlText] = useState<string>(STARTER_YAML);
+  const [yamlText, setYamlText] = useState<string>(seedYaml ?? STARTER_YAML);
   const [loading, setLoading] = useState<boolean>(!isNew);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [validation, setValidation] = useState<WorkflowValidateResponse | null>(null);

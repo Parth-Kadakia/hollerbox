@@ -84,3 +84,41 @@ def test_delete_blocks_when_runs_exist(api_client, api_surface) -> None:
     resp = api_client.delete("/workflows/demo")
     assert resp.status_code == 409
     assert "run history" in resp.json()["detail"]
+
+
+# --------------------------- templates ---------------------------
+
+def test_lists_bundled_templates(api_client) -> None:
+    resp = api_client.get("/workflows/templates")
+    assert resp.status_code == 200
+    body = resp.json()
+    # The repo ships at least the blank + a few examples.
+    ids = {t["id"] for t in body}
+    assert {"blank", "summarize_url", "generate_image"}.issubset(ids)
+    blank = next(t for t in body if t["id"] == "blank")
+    assert blank["step_count"] >= 1
+    assert blank["yaml_source"].startswith("name:")
+
+
+def test_templates_dir_env_override(api_client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOLLERBOX_TEMPLATES_DIR", str(tmp_path))
+    (tmp_path / "alpha.yaml").write_text(
+        "name: alpha\nsteps:\n  - id: a\n    type: shell\n    config: {command: 'echo'}\n"
+    )
+    resp = api_client.get("/workflows/templates")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert {t["id"] for t in body} == {"alpha"}
+
+
+def test_templates_skip_broken_yaml(api_client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOLLERBOX_TEMPLATES_DIR", str(tmp_path))
+    (tmp_path / "good.yaml").write_text(
+        "name: good\nsteps:\n  - id: a\n    type: shell\n    config: {command: 'echo'}\n"
+    )
+    (tmp_path / "broken.yaml").write_text("not: valid: yaml: probably")
+
+    resp = api_client.get("/workflows/templates")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert {t["id"] for t in body} == {"good"}

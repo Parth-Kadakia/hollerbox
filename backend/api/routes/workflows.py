@@ -8,6 +8,9 @@ exact validation error if the YAML is malformed.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
@@ -15,6 +18,7 @@ from api.deps import EngineSurface, get_surface
 from api.schemas import (
     WorkflowDetail,
     WorkflowSummary,
+    WorkflowTemplate,
     WorkflowUpsertRequest,
     WorkflowValidateRequest,
     WorkflowValidateResponse,
@@ -45,6 +49,50 @@ def _detail(row: WorkflowRow) -> WorkflowDetail:
         updated_at=row.updated_at,
         yaml_source=row.yaml_source,
     )
+
+
+def _templates_dir() -> Path:
+    """Locate the templates directory.
+
+    Search order:
+    1. `HOLLERBOX_TEMPLATES_DIR` env var
+    2. `<repo>/workflows/templates` (sibling of `backend/`)
+    3. `~/.hollerbox/templates`
+    """
+    env = os.environ.get("HOLLERBOX_TEMPLATES_DIR")
+    if env:
+        return Path(env).expanduser()
+    # backend/api/routes/workflows.py → ../../../workflows/templates
+    repo_path = Path(__file__).resolve().parents[3] / "workflows" / "templates"
+    if repo_path.is_dir():
+        return repo_path
+    return Path("~/.hollerbox/templates").expanduser()
+
+
+@router.get("/templates", response_model=list[WorkflowTemplate])
+def list_templates() -> list[WorkflowTemplate]:
+    """Bundled starter workflows. The Editor uses these for "Use template"."""
+    d = _templates_dir()
+    if not d.is_dir():
+        return []
+    out: list[WorkflowTemplate] = []
+    for path in sorted(d.glob("*.y*ml")):
+        try:
+            yaml_source = path.read_text(encoding="utf-8")
+            wf = load_workflow_from_source(yaml_source, name_hint=path.stem)
+        except (OSError, WorkflowLoadError):
+            # Skip a broken template rather than 500-ing the whole listing.
+            continue
+        out.append(
+            WorkflowTemplate(
+                id=path.stem,
+                name=wf.name,
+                description=wf.description or "",
+                yaml_source=yaml_source,
+                step_count=len(wf.steps),
+            )
+        )
+    return out
 
 
 @router.get("", response_model=list[WorkflowSummary])

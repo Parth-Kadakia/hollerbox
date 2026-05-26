@@ -13,6 +13,7 @@ import type {
   SendMessageResponse,
   WorkflowDetail,
   WorkflowSummary,
+  WorkflowTemplate,
   WorkflowValidateResponse,
 } from "./types";
 
@@ -56,6 +57,10 @@ export function getHealth() {
 
 export function listWorkflows() {
   return request<WorkflowSummary[]>("/workflows");
+}
+
+export function listTemplates() {
+  return request<WorkflowTemplate[]>("/workflows/templates");
 }
 
 export function getWorkflow(name: string) {

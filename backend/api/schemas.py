@@ -53,6 +53,16 @@ class WorkflowValidateResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class WorkflowTemplate(BaseModel):
+    """A bundled starter workflow that the Editor can pre-fill."""
+
+    id: str
+    name: str
+    description: str
+    yaml_source: str
+    step_count: int
+
+
 # --------------------------- shared: file attachments ---------------------------
 
 class FileAttachment(BaseModel):

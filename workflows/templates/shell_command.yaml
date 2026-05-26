@@ -1,0 +1,15 @@
+name: shell_command
+version: 1
+description: Run a configurable shell command. Useful for wrapping common terminal recipes.
+chat_examples:
+  - "list my downloads folder"
+  - "run my shell snippet"
+inputs:
+  command: "ls -la ~/Downloads | head -20"
+steps:
+  - id: cmd
+    type: shell
+    destructive: true
+    requires_confirmation: true
+    config:
+      command: ${inputs.command}

@@ -1,0 +1,37 @@
+name: summarize_url
+version: 1
+description: Fetch a web page, summarize it with an LLM, save the result.
+chat_examples:
+  - "summarize this URL"
+  - "summarize https://example.com"
+inputs:
+  url: "https://example.com"
+  provider: "anthropic"
+  out_path: "/tmp/hollerbox-summary.md"
+steps:
+  - id: fetch
+    type: http
+    config:
+      method: GET
+      url: ${inputs.url}
+
+  - id: summarize
+    type: llm
+    config:
+      provider: ${inputs.provider}
+      system: "You are a concise summarizer."
+      prompt: |
+        Summarize the following web page in 5 bullets.
+
+        URL: ${inputs.url}
+
+        Content:
+        ${steps.fetch.output.body}
+
+  - id: save
+    type: write_file
+    destructive: true
+    requires_confirmation: true
+    config:
+      path: ${inputs.out_path}
+      content: ${steps.summarize.output.text}

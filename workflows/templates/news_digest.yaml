@@ -1,0 +1,41 @@
+name: news_digest
+version: 1
+description: Fetch top Hacker News headlines on a topic, summarize, save a digest.
+chat_examples:
+  - "give me the news on {topic}"
+  - "run my news digest"
+  - "what's the latest on AI"
+inputs:
+  topic: "AI infrastructure"
+  provider: "anthropic"
+  out_path: "/tmp/hollerbox-digest.md"
+steps:
+  - id: fetch
+    type: http
+    config:
+      method: GET
+      url: "https://hn.algolia.com/api/v1/search?query=${inputs.topic}&tags=story"
+
+  - id: summarize
+    type: llm
+    config:
+      provider: ${inputs.provider}
+      system: "You are a concise news summarizer for a daily digest."
+      prompt: |
+        Summarize the top items into 5 bullets. Include each story's title and a one-line takeaway.
+
+        Topic: ${inputs.topic}
+
+        Results JSON:
+        ${steps.fetch.output.body}
+
+  - id: save
+    type: write_file
+    destructive: true
+    requires_confirmation: true
+    config:
+      path: ${inputs.out_path}
+      content: |
+        # ${inputs.topic} — ${run.date}
+
+        ${steps.summarize.output.text}
