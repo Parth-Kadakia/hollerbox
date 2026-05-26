@@ -55,7 +55,44 @@ def test_basic_completion_calls_client_with_expected_args():
     assert kwargs["max_tokens"] == 128
     assert kwargs["temperature"] == 0.2
     assert kwargs["system"] == "be brief"
-    assert kwargs["messages"] == [{"role": "user", "content": "say hello"}]
+    # `content` is always a list of typed blocks now (so we can layer
+    # image / document blocks alongside text for multimodal calls).
+    assert kwargs["messages"] == [
+        {"role": "user", "content": [{"type": "text", "text": "say hello"}]}
+    ]
+
+
+def test_image_attachment_encoded_as_base64_block():
+    from hollerbox.providers.base import Attachment
+
+    client = _FakeClient(_FakeResponse(["seen"]))
+    p = AnthropicProvider("test-key", client=client)
+    p.complete(
+        prompt="what is this",
+        attachments=[Attachment(data=b"\x89PNG fake", media_type="image/png", name="x.png")],
+    )
+    content = client.messages.last_kwargs["messages"][0]["content"]
+    assert any(b.get("type") == "image" for b in content)
+    img_block = next(b for b in content if b["type"] == "image")
+    assert img_block["source"]["media_type"] == "image/png"
+    assert img_block["source"]["type"] == "base64"
+    assert "iVBORw" in img_block["source"]["data"] or img_block["source"]["data"]
+    # Text block still present alongside.
+    assert any(b.get("type") == "text" for b in content)
+
+
+def test_pdf_attachment_encoded_as_document_block():
+    from hollerbox.providers.base import Attachment
+
+    client = _FakeClient(_FakeResponse(["read"]))
+    p = AnthropicProvider("test-key", client=client)
+    p.complete(
+        prompt="summarize",
+        attachments=[Attachment(data=b"%PDF-1.4", media_type="application/pdf", name="doc.pdf")],
+    )
+    content = client.messages.last_kwargs["messages"][0]["content"]
+    pdf_block = next(b for b in content if b["type"] == "document")
+    assert pdf_block["source"]["media_type"] == "application/pdf"
 
 
 def test_default_model_used_when_not_overridden():

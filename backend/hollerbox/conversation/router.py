@@ -72,6 +72,10 @@ Rules:
   "ask_clarifying" — safe-by-default beats guessing.
 - Workflow names must come from the catalog exactly.
 - Never invent inputs the workflow doesn't declare.
+- When the user's message ends with one or more `[attached: /path]`
+  lines, those are files they uploaded. STRONGLY prefer a workflow
+  that accepts a file (e.g. one with a `file_path` input) and pass the
+  attached path as that input. Don't ignore the attachment.
 """
 
 

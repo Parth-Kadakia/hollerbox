@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from hollerbox.providers.base import Completion, Provider
+from hollerbox.providers.base import Attachment, Completion, Provider
 
 
 class MockProvider(Provider):
@@ -40,6 +40,7 @@ class MockProvider(Provider):
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int = 1024,
+        attachments: list[Attachment] | None = None,
     ) -> Completion:
         self.calls.append(
             {
@@ -48,6 +49,7 @@ class MockProvider(Provider):
                 "model": model or self._model,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
+                "attachments": list(attachments or []),
             }
         )
         text = self._responder(prompt, system) if self._responder else self._default_text

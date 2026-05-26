@@ -1,0 +1,26 @@
+name: analyze_file
+version: 1
+description: Analyze any file you attach — images, PDFs, spreadsheets, or text — and answer a question about it.
+chat_examples:
+  - "understand this image"
+  - "describe this image"
+  - "what's in this image"
+  - "analyze the attached image"
+  - "describe the attached file"
+  - "analyze this file"
+  - "analyze the attached file"
+  - "summarize this PDF"
+  - "what does this spreadsheet say"
+inputs:
+  file_path: ""
+  provider: "anthropic"
+  prompt: "Describe what you see in detail. Surface anything notable about its content, layout, or context."
+steps:
+  - id: describe
+    type: llm
+    config:
+      provider: ${inputs.provider}
+      system: "You analyze the attached file (image, PDF, spreadsheet, or text) and answer the user's question about it. Be specific and concrete."
+      prompt: ${inputs.prompt}
+      attachments:
+        - ${inputs.file_path}

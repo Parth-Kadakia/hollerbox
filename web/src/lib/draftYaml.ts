@@ -48,6 +48,7 @@ export interface LLMStep extends StepBase {
   model: string;
   system: string;
   prompt: string;
+  attachments: string[];
 }
 export interface ImageStep extends StepBase {
   type: "image";
@@ -107,6 +108,7 @@ export function newStep(kind: StepKind, id: string): DraftStep {
         model: "",
         system: "",
         prompt: "Hello, world.",
+        attachments: [],
       };
     case "image":
       return {
@@ -155,6 +157,8 @@ function stepConfig(step: DraftStep): Record<string, unknown> {
       if (step.provider) cfg.provider = step.provider;
       if (step.model) cfg.model = step.model;
       if (step.system) cfg.system = step.system;
+      if (step.attachments && step.attachments.length > 0)
+        cfg.attachments = step.attachments;
       return cfg;
     }
     case "image": {
@@ -242,6 +246,9 @@ function parseStep(raw: unknown, idx: number): DraftStep | null {
         model: String(cfg.model ?? ""),
         system: String(cfg.system ?? ""),
         prompt: String(cfg.prompt ?? ""),
+        attachments: Array.isArray(cfg.attachments)
+          ? cfg.attachments.filter((x): x is string => typeof x === "string")
+          : [],
       };
     case "image":
       return {

@@ -41,6 +41,12 @@ llm = [
     "google-genai>=1.0",
     "httpx>=0.27",
 ]
+files = [
+    # Extract text from non-image attachments so chat "analyze this PDF /
+    # spreadsheet" works without LLM-native PDF support.
+    "pypdf>=4.0",
+    "openpyxl>=3.1",
+]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",

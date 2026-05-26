@@ -5,9 +5,14 @@ Lazy import — see hollerbox/providers/anthropic.py for the rationale.
 
 from __future__ import annotations
 
-from hollerbox.providers.base import Completion, Provider
+import base64
+
+from hollerbox.providers.base import Attachment, Completion, Provider
 
 DEFAULT_MODEL = "gpt-4o-mini"
+
+# Image MIME types the chat-completions API accepts as data URLs.
+_VISION_MEDIA_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
 
 class OpenAIProvider(Provider):
@@ -43,12 +48,32 @@ class OpenAIProvider(Provider):
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int = 1024,
+        attachments: list[Attachment] | None = None,
     ) -> Completion:
         effective_model = model or self._default_model
+
+        # Build the user message. When attachments are present, the
+        # content becomes a list of parts (image + text). OpenAI chat
+        # accepts images via data-URL `image_url`; PDFs/Excel are not
+        # natively supported here — the LLM step has already extracted
+        # their text into `prompt` for us.
+        user_content: list[dict] | str
+        image_parts: list[dict] = []
+        for a in attachments or []:
+            if a.media_type in _VISION_MEDIA_TYPES:
+                b64 = base64.b64encode(a.data).decode("ascii")
+                image_parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{a.media_type};base64,{b64}"},
+                })
+        user_content = (
+            [*image_parts, {"type": "text", "text": prompt}] if image_parts else prompt
+        )
+
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
+        messages.append({"role": "user", "content": user_content})
         kwargs: dict = {
             "model": effective_model,
             "messages": messages,

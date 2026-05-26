@@ -11,7 +11,7 @@ from typing import ClassVar
 
 import httpx
 
-from hollerbox.providers.base import Completion, Provider
+from hollerbox.providers.base import Attachment, Completion, Provider
 
 DEFAULT_HOST = "http://localhost:11434"
 DEFAULT_MODEL = "llama3.1"
@@ -105,7 +105,12 @@ class OllamaProvider(Provider):
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int = 1024,
+        attachments: list[Attachment] | None = None,
     ) -> Completion:
+        # Ollama can do images per-model (llava etc.) but not via the
+        # text /api/generate endpoint we use; drop attachments for now
+        # and let the LLM step decide whether that's acceptable.
+        del attachments
         effective_model = model or self._pick_default_model()
         options: dict = {"num_predict": max_tokens}
         if temperature is not None:

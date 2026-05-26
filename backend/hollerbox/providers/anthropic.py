@@ -8,9 +8,10 @@ machine with no LLM SDKs installed.
 
 from __future__ import annotations
 
+import base64
 from typing import TYPE_CHECKING
 
-from hollerbox.providers.base import Completion, Provider
+from hollerbox.providers.base import Attachment, Completion, Provider
 
 if TYPE_CHECKING:
     pass
@@ -19,6 +20,10 @@ if TYPE_CHECKING:
 # Per the project guideline: default to the latest/most capable Claude
 # model. Users override per-step via the workflow `model:` field.
 DEFAULT_MODEL = "claude-opus-4-7"
+
+# Image MIME types Anthropic's vision endpoint accepts. Other types are
+# folded back to text via the LLM step's extractor.
+_VISION_MEDIA_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
 
 class AnthropicProvider(Provider):
@@ -54,12 +59,38 @@ class AnthropicProvider(Provider):
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int = 1024,
+        attachments: list[Attachment] | None = None,
     ) -> Completion:
         effective_model = model or self._default_model
+        user_content: list[dict] = []
+        for a in attachments or []:
+            # Anthropic accepts native PDFs via the "document" block on
+            # claude-3.5+; images via "image" block. Everything else gets
+            # dropped — the LLM step's extractor already folded text-y
+            # formats into the prompt.
+            if a.media_type in _VISION_MEDIA_TYPES:
+                user_content.append({
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": a.media_type,
+                        "data": base64.b64encode(a.data).decode("ascii"),
+                    },
+                })
+            elif a.media_type == "application/pdf":
+                user_content.append({
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": base64.b64encode(a.data).decode("ascii"),
+                    },
+                })
+        user_content.append({"type": "text", "text": prompt})
         kwargs: dict = {
             "model": effective_model,
             "max_tokens": max_tokens,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [{"role": "user", "content": user_content}],
         }
         # Newer Claude models (e.g. claude-opus-4-7) reject temperature
         # outright with "temperature is deprecated for this model". Only
