@@ -25,6 +25,24 @@ if LOGO.is_file():
     datas.append((str(LOGO), "assets"))
 
 hiddenimports = [
+    # The launcher imports `api.main` indirectly via uvicorn (which uses
+    # the import string "api.main:app"). PyInstaller's static analysis
+    # doesn't see import strings, so list it explicitly.
+    "api.main",
+    "api.__main__",
+    "api.auth",
+    "api.deps",
+    "api.worker",
+    "api._attachments",
+    "api.routes.approvals",
+    "api.routes.conversations",
+    "api.routes.files",
+    "api.routes.health",
+    "api.routes.providers",
+    "api.routes.runs",
+    "api.routes.secrets",
+    "api.routes.settings",
+    "api.routes.workflows",
     # Steps + providers register themselves on import — PyInstaller's
     # static analysis doesn't catch the registry side-effects, so list
     # them explicitly.

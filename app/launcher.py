@@ -218,6 +218,23 @@ class HollerBoxApp:
         rumps.quit_application()  # type: ignore[attr-defined]
 
 
+def _run_api_inline() -> None:
+    """Boot the API server in this process. Used by the bundled binary
+    when re-invoked with `--run-api` — avoids spawning a separate uv
+    subprocess that wouldn't exist inside a frozen bundle.
+
+    Mirrors `api/__main__.main` but doesn't dynamically import it,
+    which PyInstaller's static analysis can't see and so doesn't bundle.
+    """
+    import uvicorn
+
+    host = os.environ.get("HOLLERBOX_API_HOST", DEFAULT_HOST)
+    port = int(os.environ.get("HOLLERBOX_API_PORT", str(DEFAULT_PORT)))
+    # Reload mode spawns a watcher subprocess; impossible inside a
+    # PyInstaller frozen bundle and unnecessary in production.
+    uvicorn.run("api.main:app", host=host, port=port, reload=False)
+
+
 def main() -> None:
     """Module entry point.
 
@@ -227,9 +244,7 @@ def main() -> None:
       subprocess to re-invoke itself).
     """
     if len(sys.argv) > 1 and sys.argv[1] == "--run-api":
-        from api import __main__ as api_main
-
-        api_main.main()
+        _run_api_inline()
         return
 
     if rumps is None:
