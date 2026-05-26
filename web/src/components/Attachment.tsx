@@ -1,6 +1,5 @@
+import { API_BASE, withTokenQuery } from "../api/client";
 import type { FileAttachment } from "../api/types";
-
-const API_BASE = "/api";
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -9,7 +8,9 @@ function formatBytes(n: number): string {
 }
 
 export default function Attachment({ att }: { att: FileAttachment }) {
-  const fullUrl = `${API_BASE}${att.url}`;
+  // `<img src>` and direct links can't send Authorization headers, so
+  // append the token as a query param when auth is enabled.
+  const fullUrl = withTokenQuery(`${API_BASE}${att.url}`);
   if (att.kind === "image") {
     return (
       <a href={fullUrl} target="_blank" rel="noreferrer" className="block">

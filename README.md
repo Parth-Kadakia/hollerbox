@@ -36,6 +36,7 @@
 - [Architecture](#architecture)
 - [Install](#install)
 - [CLI reference](#cli-reference)
+- [Remote access](#remote-access)
 - [HTTP API](#http-api)
 - [LLM providers + secrets](#llm-providers--secrets)
 - [Design principles](#design-principles)
@@ -89,11 +90,18 @@ logic. HollerBox is the opposite:
 
 ## Try it in 60 seconds
 
-After [installing](#install), start the two servers and open the app:
+After [installing](#install), one command builds the web UI and starts
+everything on a single port:
 
 ```bash
-make api          # HTTP API + background worker → http://127.0.0.1:8787
-make dev          # web app                        → http://127.0.0.1:5173
+make app          # http://127.0.0.1:8787 — API, worker, and web UI together
+```
+
+Or if you're actively editing the web app, two-terminal dev mode:
+
+```bash
+make api          # http://127.0.0.1:8787 — API + worker
+make dev          # http://127.0.0.1:5173 — Vite dev server with hot reload
 ```
 
 Then in the browser:
@@ -344,6 +352,58 @@ npm run dev
 Environment overrides:
 - `HOLLERBOX_DB_URL` — SQLite URL (default `sqlite:///~/.hollerbox/hollerbox.sqlite`)
 - `HOLLERBOX_KEY_PATH` — Fernet key file (default `~/.hollerbox/key`)
+
+## Remote access
+
+By default HollerBox listens on `127.0.0.1` and has no authentication —
+it assumes localhost-only. To reach it from another machine or network,
+do two things:
+
+### 1. Turn on auth
+
+Set a random token before starting the server:
+
+```bash
+export HOLLERBOX_API_KEY="$(openssl rand -hex 16)"
+make app
+```
+
+The server logs the token on startup. The web UI will prompt you for it
+once on first load and store it in localStorage. Every API call sends it
+as `Authorization: Bearer <token>`.
+
+### 2. Pick an access path
+
+**Option A — Tailscale (recommended for personal use).**
+Install [Tailscale](https://tailscale.com/) on the host *and* the device
+you want to reach it from. Both sit on a private mesh; HollerBox is
+accessible at your machine's Tailscale hostname, e.g.
+`http://my-mac.tailnet-name.ts.net:8787`. No router config, no public
+URL, automatic mTLS. Free for personal use.
+
+```bash
+# On the host running HollerBox:
+HOLLERBOX_API_HOST=0.0.0.0 HOLLERBOX_API_KEY=$YOUR_TOKEN make app
+```
+
+**Option B — Cloudflare Tunnel (public URL, free).**
+For when you want to share a link or hit the server from a device that
+can't run Tailscale.
+
+```bash
+# Install once (macOS):
+brew install cloudflared
+
+# Run alongside HollerBox:
+cloudflared tunnel --url http://127.0.0.1:8787
+```
+
+Cloudflare prints a `https://random-words.trycloudflare.com` URL that
+proxies to your local server. The token gate stops random visitors from
+doing anything; rotate the token if a URL leaks.
+
+> ⚠️ Never expose a token-less HollerBox. The `shell` and `python_step`
+> step types run arbitrary code; treat the token as you would an SSH key.
 
 ## HTTP API
 

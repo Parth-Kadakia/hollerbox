@@ -17,7 +17,13 @@ import type {
   WorkflowValidateResponse,
 } from "./types";
 
-const BASE = "/api";
+// In `npm run dev` the Vite proxy maps `/api/*` → `localhost:8787/*`.
+// In the bundled deployment FastAPI serves both the API and the SPA on
+// the same origin, so the `/api` prefix isn't there. Detect at build
+// time so calls work in both modes.
+export const API_BASE = import.meta.env.DEV ? "/api" : "";
+const BASE = API_BASE;
+const TOKEN_KEY = "hollerbox.api_token";
 
 export class ApiError extends Error {
   constructor(public status: number, public detail: string) {
@@ -26,10 +32,34 @@ export class ApiError extends Error {
   }
 }
 
+export function getApiToken(): string {
+  return localStorage.getItem(TOKEN_KEY) ?? "";
+}
+
+export function setApiToken(token: string): void {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+/** Append `?_token=...` to a URL when a token is stored. Used for
+ *  EventSource and direct `<img src>` cases that can't send headers. */
+export function withTokenQuery(url: string): string {
+  const t = getApiToken();
+  if (!t) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}_token=${encodeURIComponent(t)}`;
+}
+
+function authHeader(): Record<string, string> {
+  const t = getApiToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const baseHeaders = { "Content-Type": "application/json", ...authHeader() };
   const resp = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...init,
+    headers: { ...baseHeaders, ...(init?.headers ?? {}) },
   });
   if (!resp.ok) {
     let detail = resp.statusText;
@@ -215,10 +245,15 @@ export interface UploadResponse {
 }
 
 export async function uploadFile(file: File): Promise<UploadResponse> {
-  // Multipart upload — can't use the JSON `request` helper.
+  // Multipart upload — can't use the JSON `request` helper because
+  // setting Content-Type manually breaks multipart boundary detection.
   const form = new FormData();
   form.append("file", file);
-  const resp = await fetch("/api/files/upload", { method: "POST", body: form });
+  const resp = await fetch(`${BASE}/files/upload`, {
+    method: "POST",
+    headers: authHeader(),
+    body: form,
+  });
   if (!resp.ok) {
     let detail = resp.statusText;
     try {
@@ -239,7 +274,8 @@ export function streamConversationEvents(
   onDone?: () => void,
   onError?: (err: Event) => void,
 ): EventSource {
-  const es = new EventSource(`${BASE}/conversations/${convId}/events`);
+  // EventSource can't send custom headers — token rides in the query string.
+  const es = new EventSource(withTokenQuery(`${BASE}/conversations/${convId}/events`));
   es.addEventListener("message", (ev: MessageEvent) => {
     try {
       onMessage(JSON.parse(ev.data) as ChatMessage);
@@ -268,7 +304,7 @@ export function streamRunEvents(
   onEvent: (e: RunStreamEvent) => void,
   onError?: (err: Event) => void,
 ): EventSource {
-  const es = new EventSource(`${BASE}/runs/${runId}/events`);
+  const es = new EventSource(withTokenQuery(`${BASE}/runs/${runId}/events`));
   ["status", "step", "done"].forEach((name) => {
     es.addEventListener(name, (ev: MessageEvent) => {
       try {
