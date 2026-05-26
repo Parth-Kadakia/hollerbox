@@ -30,6 +30,14 @@ import time
 import webbrowser
 from pathlib import Path
 
+from updater import (
+    UpdateAvailable,
+    __version__,
+    apply_update,
+    check_for_update,
+    installed_app_path,
+)
+
 # rumps is macOS-only and pulls in PyObjC — import is gated so the file
 # can still be analyzed in CI on Linux. Real execution requires macOS.
 try:
@@ -108,16 +116,24 @@ class HollerBoxApp:
             icon=self._icon_path(),
             quit_button=None,
         )
+        # Built up dynamically so we can swap the "Check for updates"
+        # entry for an "Update available" entry when the poll finds one.
+        self.update_item = rumps.MenuItem(  # type: ignore[attr-defined]
+            "Check for updates", callback=self.check_updates_manually
+        )
         self.app.menu = [
             rumps.MenuItem("Open HollerBox", callback=self.open_browser),  # type: ignore[attr-defined]
             None,
             rumps.MenuItem("Copy server token", callback=self.copy_token),  # type: ignore[attr-defined]
             rumps.MenuItem("Reveal data folder", callback=self.reveal_data),  # type: ignore[attr-defined]
             rumps.MenuItem("Show logs", callback=self.show_logs),  # type: ignore[attr-defined]
+            self.update_item,
             None,
+            rumps.MenuItem(f"HollerBox v{__version__}", callback=None),  # type: ignore[attr-defined]
             rumps.MenuItem("Quit HollerBox", callback=self.quit),  # type: ignore[attr-defined]
         ]
         self.server: subprocess.Popen | None = None
+        self.pending_update: UpdateAvailable | None = None
 
     def _icon_path(self) -> str | None:
         # Use the brand logo as a menu bar icon if available.
@@ -182,10 +198,75 @@ class HollerBoxApp:
 
     def run(self) -> None:
         self.start_server()
+        # Background poll for updates. Bundled installs only — running
+        # from source has no .app to swap.
+        if installed_app_path() is not None:
+            threading.Thread(target=self._poll_for_update, daemon=True).start()
         try:
             self.app.run()
         finally:
             self.stop_server()
+
+    # --------------------------- updater ---------------------------
+
+    def _poll_for_update(self) -> None:
+        """Background check: hits GitHub, sets pending_update + flips
+        the menu label if a newer release exists."""
+        result = check_for_update()
+        if result is None:
+            return
+        self.pending_update = result
+        self.update_item.title = f"Update to v{result.latest}…"
+        try:
+            rumps.notification(  # type: ignore[attr-defined]
+                "HollerBox update available",
+                f"v{result.latest} is out",
+                "Click the menu bar icon → Update to v…",
+            )
+        except Exception:  # noqa: BLE001 — notifications can fail on some macOS configs
+            pass
+
+    def check_updates_manually(self, _sender) -> None:  # noqa: ANN001
+        """Menu callback. If we already found one, kick off the apply
+        flow; otherwise poll synchronously and tell the user."""
+        if self.pending_update is not None:
+            self._apply_pending_update()
+            return
+        result = check_for_update()
+        if result is None:
+            rumps.alert(  # type: ignore[attr-defined]
+                "You're up to date",
+                f"HollerBox v{__version__} is the latest.",
+            )
+            return
+        self.pending_update = result
+        self.update_item.title = f"Update to v{result.latest}…"
+        self._apply_pending_update()
+
+    def _apply_pending_update(self) -> None:
+        upd = self.pending_update
+        if upd is None:
+            return
+        answer = rumps.alert(  # type: ignore[attr-defined]
+            title=f"Install HollerBox v{upd.latest}?",
+            message=(
+                f"You're on v{upd.current}. The app will quit, swap "
+                "itself for the new version, and re-open. Your data "
+                "(workflows, runs, chats) stays in ~/.hollerbox/."
+            ),
+            ok="Install + restart",
+            cancel="Not now",
+        )
+        if answer != 1:  # rumps returns 1 for OK, 0 for Cancel
+            return
+        try:
+            apply_update(upd)
+        except Exception as exc:  # noqa: BLE001
+            rumps.alert("Update failed", str(exc))  # type: ignore[attr-defined]
+            return
+        # Helper is now waiting for us to quit so it can swap.
+        self.stop_server()
+        rumps.quit_application()  # type: ignore[attr-defined]
 
     # --------------------------- menu callbacks ---------------------------
 

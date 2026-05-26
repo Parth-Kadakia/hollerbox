@@ -422,6 +422,43 @@ xattr -cr /Applications/HollerBox.app
 
 …or right-click → Open the first time to bypass Gatekeeper once.
 
+### Auto-update
+
+The bundled launcher polls
+`https://api.github.com/repos/Parth-Kadakia/hollerbox/releases/latest`
+on startup. If the tag is newer than its own `__version__`, the menu
+bar shows **Update to v0.x.y…**. Clicking it downloads
+`HollerBox.zip` from the release, drops a helper shell script,
+quits, and the helper swaps `/Applications/HollerBox.app` with the
+new bundle and relaunches.
+
+Your `~/.hollerbox/` data folder (workflows, runs, chat history,
+secrets, uploads) is **never touched** by an update — only the app
+code is replaced.
+
+### Cutting a release
+
+`.github/workflows/release.yml` runs on every tag push of the form
+`v*` (and also via manual `workflow_dispatch`). It builds `HollerBox.app`
+on a macos-14 (Apple Silicon) runner, ad-hoc-signs it, zips it as
+`HollerBox.zip`, and attaches it to the release.
+
+```bash
+# Bump the version in two places:
+#   - app/updater.py        → __version__ = "0.0.2"
+#   - app/HollerBox.spec    → CFBundleShortVersionString / CFBundleVersion
+git commit -am "Release v0.0.2"
+git tag v0.0.2
+git push && git push --tags
+```
+
+GitHub Actions builds and uploads. Every running HollerBox.app picks
+it up on its next launch (and shows the "Update to v…" menu entry).
+
+> ⚠️ The runner builds for **arm64 only**. Intel-Mac users currently
+> need to build from source via `make app-build` on their own
+> machine. A second runner + Intel job can be added later if needed.
+
 ## Remote access
 
 By default HollerBox listens on `127.0.0.1` and has no authentication —

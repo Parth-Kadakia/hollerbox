@@ -110,7 +110,11 @@ app = BUNDLE(  # noqa: F821
     bundle_identifier="com.brandbox.hollerbox",
     info_plist={
         "LSUIElement": True,           # menu-bar only, no Dock icon
+        # Version must match `__version__` in app/updater.py — that's
+        # the value the auto-updater compares against the GitHub
+        # release tag. Bump both when cutting a release.
         "CFBundleShortVersionString": "0.0.1",
+        "CFBundleVersion": "0.0.1",
         "NSHighResolutionCapable": True,
     },
 )
