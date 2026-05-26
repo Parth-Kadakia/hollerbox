@@ -101,10 +101,12 @@ coll = COLLECT(  # noqa: F821
     name="HollerBox",
 )
 
+_icns = SPEC_DIR / "HollerBox.icns"
+
 app = BUNDLE(  # noqa: F821
     coll,
     name="HollerBox.app",
-    icon=None,  # ship a real .icns later; for now macOS uses a default
+    icon=str(_icns) if _icns.is_file() else None,
     bundle_identifier="com.brandbox.hollerbox",
     info_plist={
         "LSUIElement": True,           # menu-bar only, no Dock icon

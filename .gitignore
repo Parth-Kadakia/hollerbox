@@ -95,5 +95,11 @@ yarn-error.log*
 *.sqlite3
 *.db
 
+# macOS app build artifacts (regenerated from assets/logo.png)
+app/HollerBox.icns
+app/HollerBox.iconset/
+app/build/
+app/dist/
+
 # Local-only files (not for the public repo) — design brief lives here
 .local/

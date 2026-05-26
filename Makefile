@@ -45,11 +45,31 @@ app-run:
 	@cd web && npm run build
 	@cd app && uv run python launcher.py
 
-app-build:
+app-build: app/HollerBox.icns
 	@cd web && npm run build
 	@cd app && uv sync --extra build
 	@cd app && uv run pyinstaller HollerBox.spec --clean --noconfirm
 	@echo "Built: $(CURDIR)/app/dist/HollerBox.app"
+
+# Generate the macOS app icon from the source logo. Requires `sips` and
+# `iconutil` (both ship with macOS by default). Re-runs whenever the
+# logo source is newer than the produced .icns.
+app/HollerBox.icns: assets/logo.png
+	@echo "Generating $(CURDIR)/app/HollerBox.icns from $<"
+	@rm -rf app/HollerBox.iconset
+	@mkdir -p app/HollerBox.iconset
+	@sips -z 16 16     $< --out app/HollerBox.iconset/icon_16x16.png      > /dev/null
+	@sips -z 32 32     $< --out app/HollerBox.iconset/icon_16x16@2x.png   > /dev/null
+	@sips -z 32 32     $< --out app/HollerBox.iconset/icon_32x32.png      > /dev/null
+	@sips -z 64 64     $< --out app/HollerBox.iconset/icon_32x32@2x.png   > /dev/null
+	@sips -z 128 128   $< --out app/HollerBox.iconset/icon_128x128.png    > /dev/null
+	@sips -z 256 256   $< --out app/HollerBox.iconset/icon_128x128@2x.png > /dev/null
+	@sips -z 256 256   $< --out app/HollerBox.iconset/icon_256x256.png    > /dev/null
+	@sips -z 512 512   $< --out app/HollerBox.iconset/icon_256x256@2x.png > /dev/null
+	@sips -z 512 512   $< --out app/HollerBox.iconset/icon_512x512.png    > /dev/null
+	@sips -z 1024 1024 $< --out app/HollerBox.iconset/icon_512x512@2x.png > /dev/null
+	@iconutil -c icns app/HollerBox.iconset -o app/HollerBox.icns
+	@rm -rf app/HollerBox.iconset
 
 dev:
 	@cd web && npm run dev
