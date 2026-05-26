@@ -13,16 +13,18 @@
   <a href="https://github.com/Parth-Kadakia/hollerbox/actions"><img src="https://github.com/Parth-Kadakia/hollerbox/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/status-phase%205%20complete-green.svg" alt="Status">
+  <img src="https://img.shields.io/badge/status-multimodal%20chat%20%2B%20menu--bar%20app-green.svg" alt="Status">
 </p>
 
 ---
 
-> **HollerBox is a workflow engine you talk to.** You text it; it figures out
-> which workflow you mean, runs it, asks for confirmation before anything
-> destructive, and replies in the thread. Every run is typed, inspectable,
-> and persisted locally. Bring your own model — Anthropic, OpenAI, Gemini,
-> or local Ollama. Generate images too.
+> **HollerBox is a workflow engine you talk to.** You text it (drop a
+> file if you want — image, PDF, spreadsheet); it picks the right
+> workflow, asks before anything destructive, and replies in the thread.
+> Every run is typed, inspectable, and persisted locally. Bring your own
+> model — Anthropic, OpenAI, Gemini, or local Ollama. Generate images too.
+> Ships as a single-process server, or as a macOS menu-bar app you
+> double-click — no Terminal required.
 
 ---
 
@@ -84,10 +86,14 @@ logic. HollerBox is the opposite:
 | ✅ | CLI: `validate`, `run`, `runs`, `run-detail`, `approve`, `reject`, `secret` group, `providers list` |
 | ✅ | **HTTP API + background worker + SSE** (Phase 3) — FastAPI server wraps the engine: workflows CRUD, run enqueue, approve / reject / cancel, run list & detail, write-only secrets, settings, providers, live SSE event stream. OpenAPI docs at `/docs`. |
 | ✅ | **Web UI core** (Phase 4) — Dashboard / Workflows / Editor (Monaco + live validation) / Runs / Run detail (live SSE trace + approve / reject / cancel) / Settings (providers + secrets). React + TS + Tailwind v4 + react-router + Monaco. |
-| ✅ | **Conversational interface** (Phase 5) — chat router (LLM-driven), session manager, "reply YES to confirm" approval flow, inline approval cards, chat history sidebar with auto-named threads + delete. Text the engine and it picks the right workflow, asks before destructive steps, and replies with the result. |
-| ✅ | **Inline file output** — when a chat or run produces a file (`image`, `write_file`, etc.) the UI fetches it through a sandboxed `/files` endpoint and renders images inline; everything else gets a 📎 download chip. Only paths a real step recorded are served (everything else is 403). |
-| ✅ | 301 backend tests + 8 web tests, all green, all offline. CI on every push (pytest + ruff for backend, Vite build + Vitest for web) |
-| ⏳ | Workflow authoring UX (templates + form builder — YAML is fine but only for devs), scheduling, agent step, PWA (Phases 6–8) |
+| ✅ | **Conversational interface** (Phase 5) — chat router (LLM-driven), session manager, "reply YES to confirm" approval flow, inline approval cards, chat history sidebar with auto-named threads + delete, per-turn provider/model picker. Text the engine and it picks the right workflow, asks before destructive steps, and replies with the result. |
+| ✅ | **File analysis in chat** — drop an image, PDF, Excel, CSV, or text file onto the chat; the file lands in a sandbox, the router sees the path, and a vision-capable LLM (Anthropic Claude / OpenAI GPT-4o) describes or summarizes it. PDFs / spreadsheets get extracted locally and folded into the prompt. |
+| ✅ | **Inline file output** — when a workflow produces a file (`image`, `write_file`, etc.) the UI renders images inline via a sandboxed `/files` endpoint and everything else gets a 📎 download chip. Only paths a real step recorded — or files the user uploaded — are served (everything else is 403). |
+| ✅ | **Workflow authoring without YAML** — Editor opens in a form-based step builder by default (typed cards per step type); the YAML view is one toggle away for power users. Six starter templates ship in `workflows/templates/` and auto-register on first startup so they appear in `/workflows` ready to use. Template upgrades flow to users via a `version:` bump. |
+| ✅ | **Single-process bundle** — FastAPI serves the built web UI on the same port as the API. `make app` is the one-command "everything on http://127.0.0.1:8787" path. A `rumps`-based macOS launcher (`make app-build`) produces a menu-bar HollerBox.app — double-click, browser opens, no Terminal. |
+| ✅ | **Remote-ready** — optional `HOLLERBOX_API_KEY` bearer-token auth (off by default for localhost). Wired for Tailscale or Cloudflare Tunnel. Mobile-responsive layout so the same UI works from a phone. |
+| ✅ | 341 backend tests + 14 web tests, all green, all offline. CI on every push (pytest + ruff for backend, Vite build + Vitest for web) |
+| ⏳ | Scheduling, agent step (chat fallback when no workflow matches), PWA + push (Phases 6–8) |
 
 ## Try it in 60 seconds
 
@@ -110,13 +116,18 @@ Then in the browser:
 1. **Settings** → drop in your `ANTHROPIC_API_KEY` (or `OPENAI_API_KEY`). The
    value never leaves your machine and is stored encrypted in
    `~/.hollerbox/`.
-2. **Chat** (the default route) → type *"run the hello workflow"*. The
-   router picks `hello`, the worker drives it, the result lands as a
-   message. If a step is destructive, you'll see an **Approve / Reject**
-   card — or just reply `YES` / `NO`.
-3. **Workflows / Editor** → YAML lives on disk, with Monaco syntax
-   highlighting and live validation. *(A form-based builder lands next so
-   you don't have to write YAML for the common case.)*
+2. **Chat** (the default route) → drop an image onto the input or click
+   the 📎 button, then type *"understand this image"*. The router picks
+   the bundled `analyze_file` workflow, vision-pipes the file to Claude
+   or GPT-4o, and replies with a full description. PDFs and spreadsheets
+   work the same way. If a step is destructive (e.g. `generate_image`
+   writing to disk), you'll see an **Approve / Reject** card — or just
+   reply `YES` / `NO`.
+3. **Workflows / Editor** → six starter templates ship pre-registered
+   (analyze_file, generate_image, summarize_url, news_digest,
+   shell_command, blank). The Editor opens in a **Form** view with
+   typed cards per step type — no YAML required for the common case.
+   YAML view is one toggle away.
 4. **Runs** → every run, every step. Files the run produced render inline
    (images as `<img>`, other files as a download chip).
 
@@ -158,12 +169,27 @@ A few details worth knowing:
   (truncated). The sidebar shows your history with `New chat` for empty
   ones; hover any row → small `×` to delete (the runs that thread
   triggered stay in `/runs` either way).
+- **Provider / model picker per turn.** Dropdown in the chat header
+  switches between any text provider you've configured (Anthropic /
+  OpenAI / Ollama). For Ollama, the model field becomes a dropdown of
+  the models you've actually `ollama pull`-ed — no hard-coded defaults.
+- **File attachments.** Click 📎, drop a file. It uploads to a
+  sandboxed `~/.hollerbox/uploads/` and the path rides into the router
+  prompt as `[attached: …]`. The router is instructed to prefer
+  workflows that take a `file_path` input when files are attached, so
+  "understand this image" reliably routes to `analyze_file`. Images
+  flow through Claude/GPT-4o vision; PDFs use Anthropic's native
+  document support or fall back to `pypdf` text extraction; Excel and
+  CSV are read locally via `openpyxl` and folded into the prompt.
 - **The router never fabricates workflow names.** If the LLM picks a name
   not in your catalog, the response is rejected and the user sees a
   clarifying reply instead.
 - **Workflow catalog is read from your `workflows/` directory + DB.** The
   `description:` and `chat_examples:` fields are what the router reads
-  to decide. Better hints → better routing.
+  to decide. Better hints → better routing. Templates from
+  `workflows/templates/` are auto-imported on startup, and bumping a
+  template's `version:` ships the fix to existing installs without
+  asking the user to recreate it.
 - **Mid-approval, the router is bypassed.** If a thread has a paused run,
   your next message is interpreted as `yes` / `no` / "please clarify"
   rather than as a new request. Click the approval card or type the word
@@ -467,6 +493,9 @@ Interactive OpenAPI docs at [http://127.0.0.1:8787/docs](http://127.0.0.1:8787/d
 | `GET /conversations/{id}/messages` | Full message thread |
 | `POST /conversations/{id}/messages` | Send a user message; returns updated thread |
 | `GET /conversations/{id}/events` | **SSE** stream — `message`, `done` events |
+| `POST /files/upload` | Upload a file (multipart). Returns `{path, url, name, size_bytes}`. |
+| `GET /files?path=...` | Serve a file produced by a step **or** uploaded by the user. 403 otherwise. |
+| `GET /workflows/templates` | List bundled starter templates (the Editor's "Use template" picker). |
 | `GET /providers` | Active text + image providers + status |
 | `GET /secrets` | List names only — values are **never** returned |
 | `PUT /secrets/{name}` | Write/rotate a secret value |
@@ -537,7 +566,7 @@ Defaults per provider (overrideable per step via `model: <id>`):
 | **Anthropic** | `claude-opus-4-7` | — (no image API yet) |
 | **OpenAI** | `gpt-4o-mini` | `gpt-image-1` |
 | **Gemini** | — (text TBD) | `gemini-3.1-flash-image-preview` |
-| **Ollama** | `llama3.1` | — |
+| **Ollama** | auto-pick from installed models (via `/api/tags`) | — |
 
 **Secret hygiene.** Real secret values exist in three places only: the
 encrypted SQLite row, the in-memory `secrets` dict during a run, and the
@@ -586,8 +615,8 @@ For honesty about what HollerBox is *not* trying to be:
 
 - ❌ A multi-user SaaS. The data model leaves room (`workspace_id NULL`
   columns are already present) but v1 is single-user.
-- ❌ A drag-and-drop workflow builder. Authoring is YAML + Monaco editor;
-  no node graph.
+- ❌ A drag-and-drop workflow builder. Authoring is typed form cards
+  (or YAML for power users); no node graph.
 - ❌ A distributed task runner. Single machine, single worker. The seam
   for a real queue is documented; the implementation is for later.
 - ❌ A messenger integration. The chat lives in HollerBox's own PWA, not
@@ -607,10 +636,13 @@ tested. Status as of the latest commit:
 | 2c | Image step + OpenAI (`gpt-image-1`) and Gemini (`gemini-3.1-flash-image-preview`) image providers — bonus extension to Phase 2 | ✅ |
 | 3 | HTTP API + background worker + SSE — workflows CRUD, run enqueue, approve/reject/cancel, providers/secrets/settings, live event stream | ✅ |
 | 4 | Web UI: Dashboard / Workflows / Editor (Monaco + live validation) / Run detail (SSE trace + approvals) / Settings | ✅ |
-| 5 | Conversational chat interface — router / session / replies, "reply YES" flow, inline approval cards | ✅ |
-| 6 | Scheduling (cron + interval) | — |
-| 7 | Agent step + agent fallback in chat | — |
-| 8 | PWA + push notifications + optional external channels | — |
+| 5 | Conversational chat — router, session, replies, "reply YES" flow, inline approval cards, history sidebar, per-turn model picker | ✅ |
+| 5b | **File attachments + multimodal** — chat upload (image / PDF / Excel / CSV / text) → vision-capable LLMs (Anthropic Claude, OpenAI GPT-4o); PDF / spreadsheet text extraction via pypdf + openpyxl | ✅ |
+| 5c | **No-YAML authoring** — form-based step builder, six starter templates, auto-import + versioned upgrades on startup | ✅ |
+| 5d | **Packaging + remote access** — single-process bundle (`make app`), macOS menu-bar `HollerBox.app` (`make app-build`), bearer-token auth, Tailscale + Cloudflare Tunnel docs, mobile-responsive layout | ✅ |
+| 6 | Scheduling (cron + interval triggers) | — |
+| 7 | Agent step + agent fallback in chat (open-ended requests no workflow covers) | — |
+| 8 | PWA + push notifications + optional external channels (Telegram, etc.) | — |
 
 ## Project layout
 
@@ -626,20 +658,31 @@ hollerbox/
 │   │   ├── secrets.py      ← Fernet-encrypted secret store
 │   │   ├── registry.py     ← step-type registry
 │   │   └── cli.py          ← `hollerbox …` CLI entry point
-│   ├── api/                ← FastAPI app + background worker (Phase 3)
-│   │   ├── main.py         ← app factory + lifespan
+│   ├── api/                ← FastAPI app + background worker (Phase 3+)
+│   │   ├── main.py         ← app factory + lifespan + template bootstrap
+│   │   ├── auth.py         ← bearer-token middleware (off until env var set)
 │   │   ├── deps.py         ← EngineSurface dependency
-│   │   ├── routes/         ← workflows, runs, approvals, providers, secrets, settings
+│   │   ├── _attachments.py ← FileAttachment helpers (chat + run detail)
+│   │   ├── routes/         ← workflows, runs, approvals, conversations,
+│   │   │                      providers, secrets, settings, files
 │   │   └── worker.py       ← polls `queued` runs, drives via Runner
-│   ├── tests/              ← pytest suite (265 tests, all offline)
+│   ├── tests/              ← pytest suite (341 tests, all offline)
 │   └── pyproject.toml
+├── app/                    ← macOS menu-bar launcher (rumps + PyInstaller)
+│   ├── launcher.py         ← `make app-run`
+│   └── HollerBox.spec      ← `make app-build` → app/dist/HollerBox.app
 ├── web/                    ← Vite + React + TS + Tailwind v4 + PWA
-├── workflows/              ← YOUR workflow YAML files
+│   └── src/components/editor/FormView.tsx  ← form-based step builder
+├── workflows/
 │   ├── hello.yaml
-│   └── examples/
-│       ├── file_pipeline.yaml
-│       ├── summarize_text.yaml
-│       └── generate_image.yaml
+│   ├── templates/          ← starter templates, auto-imported on startup
+│   │   ├── analyze_file.yaml      ← drop a file + ask a question
+│   │   ├── generate_image.yaml
+│   │   ├── summarize_url.yaml
+│   │   ├── news_digest.yaml
+│   │   ├── shell_command.yaml
+│   │   └── blank.yaml
+│   └── examples/           ← reference workflows (not auto-imported)
 ├── assets/                 ← brand assets (logo master)
 ├── .github/workflows/ci.yml
 └── README.md               ← you are here
