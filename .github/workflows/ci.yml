@@ -34,7 +34,12 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: uv sync --extra dev --frozen
+        # All optional extras the test suite reaches for:
+        #   api    — FastAPI (every HTTP test)
+        #   llm    — provider SDKs the multimodal step + provider tests need
+        #   files  — pypdf + openpyxl for attachment extraction tests
+        #   dev    — pytest + ruff
+        run: uv sync --extra api --extra llm --extra files --extra dev --frozen
 
       - name: Lint (ruff)
         run: uv run ruff check .
