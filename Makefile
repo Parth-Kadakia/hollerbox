@@ -49,7 +49,14 @@ app-build: app/HollerBox.icns
 	@cd web && npm run build
 	@cd app && uv sync --extra build
 	@cd app && uv run pyinstaller HollerBox.spec --clean --noconfirm
-	@echo "Built: $(CURDIR)/app/dist/HollerBox.app"
+	@# macOS Sequoia refuses to launch unsigned .app bundles ("broken
+	@# app" icon with a slash through it). An ad-hoc signature (no
+	@# certificate, just `--sign -`) satisfies the OS for local use.
+	@# For redistribution to anyone else this still needs a real
+	@# Developer ID + notarization.
+	@codesign --force --deep --sign - app/dist/HollerBox.app 2>/dev/null
+	@xattr -cr app/dist/HollerBox.app 2>/dev/null
+	@echo "Built: $(CURDIR)/app/dist/HollerBox.app  (ad-hoc signed)"
 
 # Generate the macOS app icon from the source logo. Requires `sips` and
 # `iconutil` (both ship with macOS by default). Re-runs whenever the

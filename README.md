@@ -404,10 +404,23 @@ make app-run
 make app-build
 ```
 
-The PyInstaller bundle is unsigned. For personal use you can run
-`xattr -d com.apple.quarantine app/dist/HollerBox.app` to bypass
-Gatekeeper. Notarization for redistribution needs an Apple developer
-account and is out of scope for the open-source build.
+`make app-build` automatically **ad-hoc signs** the bundle
+(`codesign --force --deep --sign -`) and strips quarantine attrs —
+without this, macOS Sequoia refuses to launch the app and shows a
+"prohibited" icon. The ad-hoc signature is good enough for running on
+your own machine. **Redistribution to anyone else** requires a real
+Apple Developer ID + notarization, which is out of scope for the
+open-source build.
+
+If you copy the bundle to another Mac and see the "no entry" icon,
+either re-sign it on that machine:
+
+```bash
+codesign --force --deep --sign - /Applications/HollerBox.app
+xattr -cr /Applications/HollerBox.app
+```
+
+…or right-click → Open the first time to bypass Gatekeeper once.
 
 ## Remote access
 
