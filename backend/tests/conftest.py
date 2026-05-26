@@ -57,6 +57,10 @@ def api_client(api_surface) -> Iterator:
     user's `~/.hollerbox/`.
     """
     os.environ["HOLLERBOX_WORKER_ENABLED"] = "0"
+    # Most tests assume an empty workflows table. Tests that want to
+    # exercise the boot-time template import opt in by clearing this
+    # env var themselves (see tests/test_api_bootstrap.py).
+    os.environ["HOLLERBOX_AUTO_IMPORT_TEMPLATES"] = "0"
     from fastapi.testclient import TestClient
 
     from api.main import create_app
@@ -68,3 +72,4 @@ def api_client(api_surface) -> Iterator:
             yield client
     finally:
         os.environ.pop("HOLLERBOX_WORKER_ENABLED", None)
+        os.environ.pop("HOLLERBOX_AUTO_IMPORT_TEMPLATES", None)

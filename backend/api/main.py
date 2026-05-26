@@ -51,6 +51,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         surface = build_surface()
         app.state.surface = surface
 
+    if _auto_import_templates_enabled():
+        _bootstrap_templates(surface)
+
     worker: Worker | None = None
     if _worker_enabled():
         worker = Worker(surface)
@@ -62,6 +65,46 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         if worker is not None:
             await worker.stop()
+
+
+def _auto_import_templates_enabled() -> bool:
+    return os.environ.get("HOLLERBOX_AUTO_IMPORT_TEMPLATES", "1") != "0"
+
+
+def _bootstrap_templates(surface: EngineSurface) -> None:
+    """Register every bundled template that isn't already in the DB.
+
+    The user sees them in `/workflows` and can use them in chat without
+    a manual "Use template → Save" step. Existing workflows with the
+    same name are left alone — we never overwrite the user's edits.
+    """
+    from api.routes.workflows import _templates_dir
+    from hollerbox.core.workflow import WorkflowLoadError, load_workflow_from_source
+    from hollerbox.store import repo, session_scope
+
+    d = _templates_dir()
+    if not d.is_dir():
+        return
+    imported: list[str] = []
+    skipped: list[str] = []
+    with session_scope(surface.session_factory) as s:
+        existing = {row.name for row in repo.list_workflows(s)}
+        for path in sorted(d.glob("*.y*ml")):
+            try:
+                yaml_source = path.read_text(encoding="utf-8")
+                wf = load_workflow_from_source(yaml_source, name_hint=path.stem)
+            except (OSError, WorkflowLoadError) as exc:
+                log.warning("template %s failed to load: %s", path.name, exc)
+                continue
+            if wf.name in existing:
+                skipped.append(wf.name)
+                continue
+            repo.upsert_workflow(s, wf, yaml_source=yaml_source)
+            imported.append(wf.name)
+    if imported:
+        log.info("Imported %d template(s): %s", len(imported), ", ".join(imported))
+    if skipped:
+        log.debug("Skipped %d existing workflow(s): %s", len(skipped), ", ".join(skipped))
 
 
 def create_app() -> FastAPI:
