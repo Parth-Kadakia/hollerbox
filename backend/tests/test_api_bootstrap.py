@@ -74,6 +74,73 @@ def test_existing_workflow_is_not_overwritten(importing_client, api_surface) -> 
         assert "customized" in wf["yaml_source"]
 
 
+def test_upgrades_when_bundled_version_is_higher(importing_client, api_surface) -> None:
+    """When a template's `version:` is bumped in the repo, the next
+    startup re-imports it. Lets us ship template fixes to users without
+    asking them to delete + recreate."""
+    from hollerbox.store import repo, session_scope
+
+    # Force the DB to look like an older copy of analyze_file (v1).
+    older = (
+        "name: analyze_file\n"
+        "version: 1\n"
+        "description: outdated copy\n"
+        "steps:\n"
+        "  - id: x\n"
+        "    type: shell\n"
+        "    config:\n"
+        "      command: 'echo old'\n"
+    )
+    importing_client.put("/workflows/analyze_file", json={"yaml_source": older})
+
+    # Confirm v1 is in place
+    with session_scope(api_surface.session_factory) as s:
+        row = repo.get_workflow_by_name(s, "analyze_file")
+        assert row is not None and row.version == 1
+
+    # Re-run lifespan
+    from fastapi.testclient import TestClient
+
+    from api.main import create_app
+
+    app2 = create_app()
+    app2.state.surface = api_surface
+    with TestClient(app2), session_scope(api_surface.session_factory) as s:
+        row = repo.get_workflow_by_name(s, "analyze_file")
+        assert row is not None
+        assert row.version >= 2  # picked up the bundled upgrade
+        assert "outdated copy" not in row.yaml_source
+
+
+def test_user_higher_version_is_protected(importing_client, api_surface) -> None:
+    """If the user bumps a workflow's `version:` past the bundled one,
+    bootstrap leaves it alone."""
+    from hollerbox.store import repo, session_scope
+
+    pinned = (
+        "name: analyze_file\n"
+        "version: 99\n"
+        "description: my customized version\n"
+        "steps:\n"
+        "  - id: x\n"
+        "    type: shell\n"
+        "    config:\n"
+        "      command: 'echo mine'\n"
+    )
+    importing_client.put("/workflows/analyze_file", json={"yaml_source": pinned})
+
+    from fastapi.testclient import TestClient
+
+    from api.main import create_app
+
+    app2 = create_app()
+    app2.state.surface = api_surface
+    with TestClient(app2), session_scope(api_surface.session_factory) as s:
+        row = repo.get_workflow_by_name(s, "analyze_file")
+        assert row is not None and row.version == 99
+        assert "customized" in row.yaml_source
+
+
 def test_disabling_bootstrap_via_env(monkeypatch, api_surface) -> None:
     """`HOLLERBOX_AUTO_IMPORT_TEMPLATES=0` keeps the DB empty on boot."""
     monkeypatch.setenv("HOLLERBOX_AUTO_IMPORT_TEMPLATES", "0")

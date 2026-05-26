@@ -1,5 +1,5 @@
 name: analyze_file
-version: 1
+version: 2
 description: Analyze any file you attach — images, PDFs, spreadsheets, or text — and answer a question about it.
 chat_examples:
   - "understand this image"
@@ -22,5 +22,6 @@ steps:
       provider: ${inputs.provider}
       system: "You analyze the attached file (image, PDF, spreadsheet, or text) and answer the user's question about it. Be specific and concrete."
       prompt: ${inputs.prompt}
+      max_tokens: 4096
       attachments:
         - ${inputs.file_path}

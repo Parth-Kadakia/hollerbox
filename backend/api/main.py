@@ -72,11 +72,18 @@ def _auto_import_templates_enabled() -> bool:
 
 
 def _bootstrap_templates(surface: EngineSurface) -> None:
-    """Register every bundled template that isn't already in the DB.
+    """Register bundled templates as real workflows on startup.
 
-    The user sees them in `/workflows` and can use them in chat without
-    a manual "Use template → Save" step. Existing workflows with the
-    same name are left alone — we never overwrite the user's edits.
+    Two cases handled:
+    1. **New template**: name isn't in the DB → import it.
+    2. **Upgraded template**: bundled `version:` is higher than what's
+       in the DB → re-import to pick up the fix. (Bump the template's
+       `version:` whenever you change one and want users to get the
+       update on next restart.)
+
+    We never overwrite a workflow whose stored version is >= the
+    bundled one — that protects user edits where they bumped their own
+    version.
     """
     from api.routes.workflows import _templates_dir
     from hollerbox.core.workflow import WorkflowLoadError, load_workflow_from_source
@@ -86,9 +93,10 @@ def _bootstrap_templates(surface: EngineSurface) -> None:
     if not d.is_dir():
         return
     imported: list[str] = []
+    upgraded: list[str] = []
     skipped: list[str] = []
     with session_scope(surface.session_factory) as s:
-        existing = {row.name for row in repo.list_workflows(s)}
+        by_name = {row.name: row for row in repo.list_workflows(s)}
         for path in sorted(d.glob("*.y*ml")):
             try:
                 yaml_source = path.read_text(encoding="utf-8")
@@ -96,13 +104,20 @@ def _bootstrap_templates(surface: EngineSurface) -> None:
             except (OSError, WorkflowLoadError) as exc:
                 log.warning("template %s failed to load: %s", path.name, exc)
                 continue
-            if wf.name in existing:
-                skipped.append(wf.name)
+            existing = by_name.get(wf.name)
+            if existing is None:
+                repo.upsert_workflow(s, wf, yaml_source=yaml_source)
+                imported.append(wf.name)
                 continue
-            repo.upsert_workflow(s, wf, yaml_source=yaml_source)
-            imported.append(wf.name)
+            if wf.version > existing.version:
+                repo.upsert_workflow(s, wf, yaml_source=yaml_source)
+                upgraded.append(f"{wf.name} v{existing.version}→v{wf.version}")
+                continue
+            skipped.append(wf.name)
     if imported:
         log.info("Imported %d template(s): %s", len(imported), ", ".join(imported))
+    if upgraded:
+        log.info("Upgraded %d template(s): %s", len(upgraded), ", ".join(upgraded))
     if skipped:
         log.debug("Skipped %d existing workflow(s): %s", len(skipped), ", ".join(skipped))
 
